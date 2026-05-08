@@ -78,15 +78,14 @@ router.patch('/current', requireAuth, requireAdmin, async (req, res) => {
 // ── POST /api/clubs/register ─────────────────────────────────────────────────
 // Self-service club registration. The authenticated user becomes the club admin.
 router.post('/register', requireAuth, upload.single('logo'), async (req, res) => {
-  const { name, subdomain, address, phone, email, color, courts, open_days, open_from, open_to } = req.body
+  const { name, subdomain, courts, schedule: scheduleJson } = req.body
 
   if (!name || !subdomain)
     return res.status(400).json({ message: 'Club name and subdomain are required.' })
 
-  const numCourts  = Math.max(1, parseInt(courts, 10) || 4)
-  const openDays   = (() => { try { return JSON.parse(open_days) } catch { return ['Mon','Tue','Wed','Thu','Fri','Sat'] } })()
-  const from       = open_from || '14:00'
-  const to         = open_to   || '22:00'
+  const numCourts = Math.max(1, parseInt(courts, 10) || 4)
+  // schedule: { Mon: { open: true, from: '09:00', to: '22:00' }, ... }
+  const scheduleData = (() => { try { return JSON.parse(scheduleJson) } catch { return {} } })()
 
   const DAY_LABELS = { Mon:'Monday', Tue:'Tuesday', Wed:'Wednesday', Thu:'Thursday', Fri:'Friday', Sat:'Saturday', Sun:'Sunday' }
 
@@ -96,10 +95,8 @@ router.post('/register', requireAuth, upload.single('logo'), async (req, res) =>
 
     // 1. Club row
     const settings = {
-      address:      address || '',
-      contactPhone: phone   || '',
-      contactEmail: email   || '',
-      theme: { primaryColor: color || '#c0392b' },
+      address: '', contactPhone: '', contactEmail: '',
+      theme: { primaryColor: '#c0392b' },
     }
     const { rows: [club] } = await client.query(
       `INSERT INTO clubs (name, subdomain, settings) VALUES ($1, $2, $3) RETURNING *`,
@@ -112,12 +109,13 @@ router.post('/register', requireAuth, upload.single('logo'), async (req, res) =>
       await client.query(`INSERT INTO courts (name, club_id) VALUES ($1, $2)`, [`Court ${i}`, clubId])
     }
 
-    // 3. Schedule
-    for (const day of openDays) {
+    // 3. Schedule — per-day hours
+    for (const [day, cfg] of Object.entries(scheduleData)) {
+      if (!cfg?.open) continue
       await client.query(
         `INSERT INTO schedule (day, label, start_time, end_time, is_active, club_id)
          VALUES ($1, $2, $3, $4, TRUE, $5)`,
-        [day, DAY_LABELS[day] || day, from, to, clubId]
+        [day, DAY_LABELS[day] || day, cfg.from || '09:00', cfg.to || '22:00', clubId]
       )
     }
 
