@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '@/context/AuthContext'
-import { applyClubSubdomain } from '@/api/api'
 import api from '@/api/api'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -46,7 +44,8 @@ export default function OnboardingPage() {
       fd.append('courts',   courts)
       fd.append('schedule', JSON.stringify(schedule))
       const { data } = await api.post('/clubs/register', fd)
-      applyClubSubdomain(data.club.subdomain)
+      // Store fresh JWT that now carries club_id
+      localStorage.setItem('token', data.token)
       navigate('/admin', { replace: true })
     } catch (e) {
       setError(e?.response?.data?.message || 'Something went wrong. Please try again.')

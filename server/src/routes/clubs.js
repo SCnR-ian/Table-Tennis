@@ -9,6 +9,7 @@ const pool    = require('../db')
 const multer  = require('multer')
 const path    = require('path')
 const fs      = require('fs')
+const jwt     = require('jsonwebtoken')
 const { requireAuth } = require('../middleware/auth')
 const { bustClubCache } = require('../middleware/tenant')
 
@@ -151,7 +152,16 @@ router.post('/register', requireAuth, upload.single('logo'), async (req, res) =>
     }
 
     await client.query('COMMIT')
-    res.status(201).json({ club: { id: clubId, name, subdomain } })
+
+    // Issue a new JWT so the user's token now carries their club_id
+    const { rows: [freshUser] } = await pool.query('SELECT * FROM users WHERE id=$1', [req.user.id])
+    const newToken = jwt.sign(
+      { id: freshUser.id, email: freshUser.email, role: freshUser.role, club_id: freshUser.club_id },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    )
+
+    res.status(201).json({ club: { id: clubId, name, subdomain }, token: newToken })
   } catch (err) {
     await client.query('ROLLBACK')
     if (req.file) fs.unlink(req.file.path, () => {})

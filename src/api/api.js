@@ -25,21 +25,9 @@ const api = axios.create({
       if (parts.length >= 3) subdomain = parts[0]
     }
   }
-  // Fall back to stored subdomain (for flinther.com used as admin dashboard)
-  subdomain = subdomain || import.meta.env.VITE_CLUB_SUBDOMAIN || localStorage.getItem('club_subdomain') || null
+  subdomain = subdomain || import.meta.env.VITE_CLUB_SUBDOMAIN || null
   api.defaults.headers.common['X-Club-Subdomain'] = subdomain || '_platform'
 })()
-
-// Call after login to scope all API calls to the user's club
-export function applyClubSubdomain(subdomain) {
-  if (subdomain) {
-    localStorage.setItem('club_subdomain', subdomain)
-    api.defaults.headers.common['X-Club-Subdomain'] = subdomain
-  } else {
-    localStorage.removeItem('club_subdomain')
-    api.defaults.headers.common['X-Club-Subdomain'] = '_platform'
-  }
-}
 
 // Attach JWT on every request if present
 // Also strip Content-Type for FormData so the browser sets it (with boundary)

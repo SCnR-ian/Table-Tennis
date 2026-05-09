@@ -1,6 +1,7 @@
-const jwt = require('jsonwebtoken')
+const jwt  = require('jsonwebtoken')
+const pool = require('../db')
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const header = req.headers.authorization
   if (!header || !header.startsWith('Bearer ')) {
     return res.status(401).json({ message: 'No token provided.' })
@@ -9,12 +10,21 @@ function requireAuth(req, res, next) {
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET)
 
-    // Validate club isolation: token must belong to the current club.
-    // Tokens without club_id (issued before multi-tenancy) are allowed through
-    // as a one-time transition grace period — users will get a new token on
-    // next login.
     if (req.club && payload.club_id !== undefined && payload.club_id !== req.club.id) {
       return res.status(403).json({ message: 'Token not valid for this club.' })
+    }
+
+    // Platform context: resolve club from JWT so routes don't need a subdomain header
+    if (!req.club && payload.club_id) {
+      try {
+        const { rows } = await pool.query(
+          'SELECT * FROM clubs WHERE id=$1 AND is_active=TRUE',
+          [payload.club_id]
+        )
+        if (rows[0]) req.club = rows[0]
+      } catch (err) {
+        console.error('[auth] club lookup:', err.message)
+      }
     }
 
     req.user = payload

@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
-import { authAPI, applyClubSubdomain } from '@/api/api'
-import { clubAPI } from '@/api/api'
+import { authAPI } from '@/api/api'
 
 // ---------------------------------------------------------------------------
 // Context
@@ -52,18 +51,8 @@ export function AuthProvider({ children }) {
   const clearAuth = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('user')
-    applyClubSubdomain(null)
     setToken(null)
     setUser(null)
-  }
-
-  const applyUserClub = () => {
-    // Set the club subdomain header if not already set from hostname
-    if (!localStorage.getItem('club_subdomain')) {
-      clubAPI.getMine().then(r => {
-        if (r.data.club?.subdomain) applyClubSubdomain(r.data.club.subdomain)
-      }).catch(() => {})
-    }
   }
 
   // ---- public API --------------------------------------------------------
@@ -73,7 +62,6 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await authAPI.login(credentials)
       persistUser(data.user, data.token)
-      applyUserClub()
       return { success: true, user: data.user }
     } catch (err) {
       const message = err.response?.data?.message || 'Login failed. Please try again.'
@@ -108,8 +96,7 @@ export function AuthProvider({ children }) {
   // Called by OAuthCallbackPage after the backend redirects with ?token=&user=
   const loginWithOAuth = useCallback((userData, jwt) => {
     persistUser(userData, jwt)
-    applyUserClub()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   const clearError = useCallback(() => setError(null), [])
 
