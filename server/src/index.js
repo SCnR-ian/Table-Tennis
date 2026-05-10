@@ -21,7 +21,7 @@ app.use(cors({
   origin: (origin, cb) => {
     // Allow requests with no origin (mobile apps, curl, server-to-server)
     if (!origin) return cb(null, true)
-    if (ALLOWED_ORIGINS.some(o => origin === o) || origin.endsWith('.vercel.app') || origin.endsWith('.flinther.com') || origin === 'https://flinther.com' || origin === 'http://flinther.com' || origin === 'https://eppingtabletennis.com.au' || origin === 'http://eppingtabletennis.com.au' || origin.endsWith('.eppingtabletennis.com.au') || origin.endsWith('.devtunnels.ms') || /^http:\/\/[a-z0-9-]+\.localhost(:\d+)?$/.test(origin) || /^http:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin))
+    if (ALLOWED_ORIGINS.some(o => origin === o) || origin.endsWith('.vercel.app') || origin.endsWith('.flinther.com') || origin === 'https://flinther.com' || origin === 'http://flinther.com' || origin === 'https://eppingtabletennis.com.au' || origin === 'http://eppingtabletennis.com.au' || origin.endsWith('.eppingtabletennis.com.au') || origin.endsWith('.pages.dev') || origin.endsWith('.devtunnels.ms') || /^http:\/\/[a-z0-9-]+\.localhost(:\d+)?$/.test(origin) || /^http:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin))
       return cb(null, true)
     cb(new Error(`CORS: origin ${origin} not allowed`))
   },
