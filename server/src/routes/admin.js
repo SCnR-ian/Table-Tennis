@@ -44,6 +44,21 @@ router.post('/members', async (req, res) => {
     return res.status(400).json({ message: 'Name, email and password are required.' })
   try {
     const clubId = req.club?.id ?? req.user?.club_id ?? null
+
+    // Billing guard: free plan capped at 25 members
+    const { rows: [clubBilling] } = await pool.query(
+      'SELECT billing_exempt, billing_status FROM clubs WHERE id=$1', [clubId]
+    )
+    if (clubBilling && !clubBilling.billing_exempt && clubBilling.billing_status !== 'active') {
+      const { rows: [cnt] } = await pool.query(
+        `SELECT COUNT(*)::int AS count FROM users
+         WHERE club_id=$1 AND (is_active IS NULL OR is_active = TRUE) AND is_walkin IS NOT TRUE`, [clubId]
+      )
+      if (cnt.count >= 25) {
+        return res.status(402).json({ code: 'BILLING_REQUIRED', message: 'Free plan limit reached (25 members). Upgrade to continue.' })
+      }
+    }
+
     const hash = await bcrypt.hash(password, 12)
     const { rows } = await pool.query(
       'INSERT INTO users (name, email, password_hash, phone, club_id) VALUES ($1,$2,$3,$4,$5) RETURNING *',

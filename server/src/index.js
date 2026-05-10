@@ -29,6 +29,8 @@ app.use(cors({
   },
   credentials: true,
 }))
+// Raw body needed for Stripe webhook signature verification (must come before express.json)
+app.use('/api/billing/webhook', express.raw({ type: 'application/json' }))
 app.use(express.json({ limit: '15mb' }))
 
 // Session is only needed during the brief OAuth redirect flow
@@ -88,6 +90,7 @@ app.use('/api/venue',        require('./routes/venue'))
 app.use('/api/shop',         require('./routes/shop'))
 app.use('/api/ai',           require('./routes/ai'))
 app.use('/api/finance',      require('./routes/finance'))
+app.use('/api/billing',      require('./routes/billing'))
 
 // ── Platform feedback ─────────────────────────────────────────────────────────
 app.post('/api/feedback', feedbackLimiter, async (req, res) => {
@@ -452,6 +455,11 @@ async function runMigrations() {
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(64)`,
     `UPDATE users SET email_verified = TRUE WHERE platform_owner = FALSE`,
+    `ALTER TABLE clubs ADD COLUMN IF NOT EXISTS billing_status VARCHAR(20) NOT NULL DEFAULT 'free'`,
+    `ALTER TABLE clubs ADD COLUMN IF NOT EXISTS billing_exempt BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE clubs ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)`,
+    `ALTER TABLE clubs ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255)`,
+    `UPDATE clubs SET billing_exempt = TRUE WHERE subdomain = 'epping'`,
   ]
   for (const sql of patches) {
     try { await pool.query(sql) } catch (e) { console.error('Migration warning:', e.message) }
