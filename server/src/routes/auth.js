@@ -36,15 +36,47 @@ router.post('/register', async (req, res) => {
 
   try {
     const hash = await bcrypt.hash(password, 12)
+
+    if (isPlatformOwner) {
+      // Platform signup — create unverified, send verification email
+      const verificationToken = crypto.randomBytes(32).toString('hex')
+      const { rows } = await pool.query(
+        'INSERT INTO users (name, email, password_hash, phone, club_id, platform_owner, email_verified, email_verification_token) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
+        [name, email, hash, phone || null, null, true, false, verificationToken]
+      )
+      const { sendVerificationEmail } = require('../utils/email')
+      await sendVerificationEmail({ to: email, name, token: verificationToken })
+      return res.status(201).json({ needsVerification: true })
+    }
+
+    // Club member signup — no email verification needed
     const { rows } = await pool.query(
-      'INSERT INTO users (name, email, password_hash, phone, club_id, platform_owner) VALUES ($1,$2,$3,$4,$5,$6) RETURNING *',
-      [name, email, hash, phone || null, clubId, isPlatformOwner]
+      'INSERT INTO users (name, email, password_hash, phone, club_id, platform_owner, email_verified) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
+      [name, email, hash, phone || null, clubId, false, true]
     )
     const user = rows[0]
     res.status(201).json({ token: sign(user), user: safeUser(user) })
   } catch (err) {
     if (err.code === '23505')
       return res.status(409).json({ message: 'An account with that email already exists.' })
+    console.error(err)
+    res.status(500).json({ message: 'Server error.' })
+  }
+})
+
+// GET /api/auth/verify-email?token=xxx
+router.get('/verify-email', async (req, res) => {
+  const { token } = req.query
+  if (!token) return res.status(400).json({ message: 'Missing token.' })
+  try {
+    const { rows } = await pool.query(
+      `UPDATE users SET email_verified = TRUE, email_verification_token = NULL
+       WHERE email_verification_token = $1 RETURNING id`,
+      [token]
+    )
+    if (!rows[0]) return res.status(400).json({ message: 'Invalid or expired verification link.' })
+    res.json({ verified: true })
+  } catch (err) {
     console.error(err)
     res.status(500).json({ message: 'Server error.' })
   }
@@ -78,6 +110,9 @@ router.post('/login', async (req, res) => {
 
     if (user.is_active === false)
       return res.status(403).json({ message: 'This account has been deactivated. Please contact the club.' })
+
+    if (!req.club && user.platform_owner && !user.email_verified)
+      return res.status(403).json({ message: 'Please verify your email before logging in. Check your inbox.', code: 'EMAIL_NOT_VERIFIED' })
 
     const ok = await bcrypt.compare(password, user.password_hash)
     if (!ok) return res.status(401).json({ message: 'Invalid email/phone or password.' })

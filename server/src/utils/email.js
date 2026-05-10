@@ -107,6 +107,27 @@ async function sendCoachingScheduled({ to, name, coachName, dates, start_time, e
   }
 }
 
+// ── Email verification ─────────────────────────────────────────────────────
+async function sendVerificationEmail({ to, name, token }) {
+  if (!process.env.RESEND_API_KEY) return
+  const verifyUrl = `${process.env.FLINTHER_URL || 'https://flinther.com'}/verify-email?token=${token}`
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to,
+      subject: 'Verify your Flinther account',
+      html: card(`
+        <h2 style="font-size:20px;font-weight:600;margin-bottom:8px;">Verify your email</h2>
+        <p style="color:#555;margin-bottom:28px;">Hi ${name || 'there'}, click the button below to verify your Flinther account.</p>
+        <a href="${verifyUrl}" style="display:inline-block;background:#111;color:#fff;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:500;">Verify email →</a>
+        <p style="color:#aaa;font-size:12px;margin-top:28px;">This link expires in 24 hours. If you didn't sign up for Flinther, you can ignore this email.</p>
+      `),
+    })
+  } catch (e) {
+    console.error('[email] sendVerificationEmail failed:', e.message)
+  }
+}
+
 // ── Flinther platform feedback ─────────────────────────────────────────────
 async function sendFeedback({ message, name, email, page }) {
   if (!process.env.RESEND_API_KEY) return
@@ -129,4 +150,4 @@ async function sendFeedback({ message, name, email, page }) {
   }
 }
 
-module.exports = { sendBookingConfirmation, sendSocialPlayJoined, sendCoachingScheduled, sendFeedback }
+module.exports = { sendBookingConfirmation, sendSocialPlayJoined, sendCoachingScheduled, sendFeedback, sendVerificationEmail }

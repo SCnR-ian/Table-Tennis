@@ -431,6 +431,9 @@ async function runMigrations() {
     `ALTER TABLE club_articles ADD COLUMN IF NOT EXISTS gallery_images JSONB DEFAULT '[]'::jsonb`,
     `ALTER TABLE users ALTER COLUMN club_id DROP NOT NULL`,
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS platform_owner BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT FALSE`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(64)`,
+    `UPDATE users SET email_verified = TRUE WHERE platform_owner = FALSE`,
   ]
   for (const sql of patches) {
     try { await pool.query(sql) } catch (e) { console.error('Migration warning:', e.message) }
