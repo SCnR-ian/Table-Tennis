@@ -71,6 +71,15 @@ app.use('/api/shop',         require('./routes/shop'))
 app.use('/api/ai',           require('./routes/ai'))
 app.use('/api/finance',      require('./routes/finance'))
 
+// ── Platform feedback ─────────────────────────────────────────────────────────
+app.post('/api/feedback', async (req, res) => {
+  const { message, name, email, page } = req.body
+  if (!message?.trim()) return res.status(400).json({ error: 'Message is required.' })
+  const { sendFeedback } = require('./utils/email')
+  await sendFeedback({ message: message.trim(), name: name?.trim(), email: email?.trim(), page })
+  res.json({ ok: true })
+})
+
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 

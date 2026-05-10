@@ -107,4 +107,26 @@ async function sendCoachingScheduled({ to, name, coachName, dates, start_time, e
   }
 }
 
-module.exports = { sendBookingConfirmation, sendSocialPlayJoined, sendCoachingScheduled }
+// ── Flinther platform feedback ─────────────────────────────────────────────
+async function sendFeedback({ message, name, email, page }) {
+  if (!process.env.RESEND_API_KEY) return
+  const to = process.env.ADMIN_EMAIL || 'ianlinaus@gmail.com'
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to,
+      subject: `Flinther feedback${name ? ` from ${name}` : ''}`,
+      html: card(`
+        <h2 style="font-size:20px;font-weight:600;margin-bottom:16px;">New feedback</h2>
+        ${name  ? `<p style="font-size:14px;color:#555;margin:4px 0;"><strong>Name:</strong> ${name}</p>`   : ''}
+        ${email ? `<p style="font-size:14px;color:#555;margin:4px 0;"><strong>Email:</strong> ${email}</p>` : ''}
+        ${page  ? `<p style="font-size:14px;color:#555;margin:4px 0;"><strong>Page:</strong> ${page}</p>`   : ''}
+        <div style="background:#f9f9f9;border-radius:8px;padding:16px;margin-top:16px;font-size:14px;color:#333;line-height:1.6;white-space:pre-wrap;">${message}</div>
+      `),
+    })
+  } catch (e) {
+    console.error('[email] sendFeedback failed:', e.message)
+  }
+}
+
+module.exports = { sendBookingConfirmation, sendSocialPlayJoined, sendCoachingScheduled, sendFeedback }
