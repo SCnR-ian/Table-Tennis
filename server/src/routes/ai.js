@@ -1786,7 +1786,7 @@ router.post('/chat', requireAuth, requireAdmin, async (req, res) => {
   const { message, history = [] } = req.body
   if (!message?.trim()) return res.status(400).json({ message: 'No message provided.' })
 
-  const clubId  = req.club?.id ?? 1
+  const clubId  = req.club?.id ?? req.user?.club_id ?? null
   const adminId = req.user.id
   const today   = todaySydney()
 

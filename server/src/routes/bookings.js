@@ -58,7 +58,7 @@ router.get('/available', async (req, res) => {
   const { date } = req.query
   if (!date) return res.status(400).json({ message: 'date query param required.' })
   softAuth(req)
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     // Fetch all occupied blocks and compute per-30-min-slot court usage
     const { rows: bookingGroups } = await pool.query(
@@ -119,7 +119,7 @@ router.get('/available', async (req, res) => {
 // GET /api/bookings/my
 router.get('/my', requireAuth, async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       `SELECT
          b.booking_group_id,
@@ -150,7 +150,7 @@ router.get('/my', requireAuth, async (req, res) => {
 // GET /api/bookings/:id
 router.get('/:id', requireAuth, async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       `SELECT b.*, c.name AS court_name FROM bookings b
        LEFT JOIN courts c ON c.id=b.court_id WHERE b.id=$1 AND b.club_id=$2`,
@@ -180,7 +180,7 @@ router.post('/', requireAuth, async (req, res) => {
     slots.push([minsToTime(t), minsToTime(t + 30)])
 
   const groupId = randomUUID()
-  const clubId  = req.club?.id ?? 1
+  const clubId  = req.club?.id ?? req.user?.club_id ?? null
   const client  = await pool.connect()
 
   try {
@@ -277,7 +277,7 @@ router.post('/group/:groupId/extend', requireAuth, async (req, res) => {
   if (!intentId)
     return res.status(400).json({ message: 'intentId is required.' })
 
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     // Verify the PaymentIntent before touching the DB
     const stripe = getStripe()
@@ -346,7 +346,7 @@ router.delete('/group/:groupId', requireAuth, async (req, res) => {
   if (!UUID_RE.test(req.params.groupId))
     return res.status(400).json({ message: 'Invalid booking group ID.' })
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'SELECT user_id, payment_intent_id FROM bookings WHERE booking_group_id=$1 AND club_id=$2 LIMIT 1',
       [req.params.groupId, clubId]
@@ -410,7 +410,7 @@ router.delete('/group/:groupId', requireAuth, async (req, res) => {
 // DELETE /api/bookings/:id
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'SELECT * FROM bookings WHERE id=$1 AND club_id=$2',
       [req.params.id, clubId]

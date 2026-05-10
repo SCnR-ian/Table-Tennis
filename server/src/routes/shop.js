@@ -32,7 +32,7 @@ const IMAGE_AGG = `
 
 // GET /api/shop/products?category=rubbers  — public
 router.get('/products', async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { category } = req.query
   try {
     const catFilter = category && CATEGORIES.includes(category) ? `AND p.category=$2` : ''
@@ -57,7 +57,7 @@ router.get('/products', async (req, res) => {
 // NOTE: must be before /products/:id or Express matches 'admin' as :id
 router.get('/products/admin', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT p.id, p.name, p.category, p.price, p.description, p.sort_order, p.is_active,
@@ -77,7 +77,7 @@ router.get('/products/admin', requireAuth, async (req, res) => {
 
 // GET /api/shop/products/:id — public, single product with all images
 router.get('/products/:id', async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [p] } = await pool.query(
       `SELECT p.id, p.name, p.category, p.price, p.description, p.sort_order,
@@ -98,7 +98,7 @@ router.get('/products/:id', async (req, res) => {
 // POST /api/shop/products (admin)
 router.post('/products', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { name, category, price, description, sort_order, stock,
           code, product_type, reaction_property, vibration_property,
           structure, thickness, head_size } = req.body
@@ -122,7 +122,7 @@ router.post('/products', requireAuth, async (req, res) => {
 // PATCH /api/shop/products/:id (admin)
 router.patch('/products/:id', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { name, category, price, description, sort_order, is_active, stock,
           code, product_type, reaction_property, vibration_property,
           structure, thickness, head_size } = req.body
@@ -152,7 +152,7 @@ router.patch('/products/:id', requireAuth, async (req, res) => {
 // DELETE /api/shop/products/:id (admin)
 router.delete('/products/:id', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     // delete image files
     const { rows: imgs } = await pool.query(
@@ -176,7 +176,7 @@ router.delete('/products/:id', requireAuth, async (req, res) => {
 // POST /api/shop/products/:id/images (admin) — upload one image (max 6 per product)
 router.post('/products/:id/images', requireAuth, upload.single('image'), async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   if (!req.file) return res.status(400).json({ message: 'No file uploaded.' })
   try {
     // Verify product belongs to this club
@@ -206,7 +206,7 @@ router.post('/products/:id/images', requireAuth, upload.single('image'), async (
 // DELETE /api/shop/products/:id/images/:imageId (admin)
 router.delete('/products/:id/images/:imageId', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [img] } = await pool.query(
       `DELETE FROM product_images
@@ -233,7 +233,7 @@ router.get('/images/:filename', (req, res) => {
 router.post('/orders', requireAuth, async (req, res) => {
   const { intentId, delivery_type, address } = req.body
   if (!intentId) return res.status(400).json({ message: 'intentId is required.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const client = await pool.connect()
   try {
     // Prevent double-save
@@ -287,7 +287,7 @@ router.post('/orders', requireAuth, async (req, res) => {
 
 // GET /api/shop/orders  — admin: all orders; member: own orders
 router.get('/orders', requireAuth, async (req, res) => {
-  const clubId  = req.club?.id ?? 1
+  const clubId  = req.club?.id ?? req.user?.club_id ?? null
   const isAdmin = req.user.role === 'admin'
   try {
     const { rows } = await pool.query(
@@ -318,7 +318,7 @@ router.get('/orders', requireAuth, async (req, res) => {
 router.patch('/orders/:id', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ message: 'Admin only.' })
   const { status } = req.body
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const VALID = ['pending','paid','processing','shipped','completed','cancelled']
   if (!VALID.includes(status)) return res.status(400).json({ message: 'Invalid status.' })
   try {

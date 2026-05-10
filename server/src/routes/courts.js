@@ -4,7 +4,7 @@ const pool   = require('../db')
 // GET /api/courts
 router.get('/', async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'SELECT * FROM courts WHERE is_active=TRUE AND club_id=$1 ORDER BY id',
       [clubId]
@@ -16,7 +16,7 @@ router.get('/', async (req, res) => {
 // GET /api/courts/:id
 router.get('/:id', async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'SELECT * FROM courts WHERE id=$1 AND club_id=$2',
       [req.params.id, clubId]

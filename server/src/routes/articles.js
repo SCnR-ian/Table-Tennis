@@ -4,7 +4,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth')
 
 // GET /api/articles?type=competition|news|achievement&limit=20&offset=0
 router.get('/', async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { type, limit = 20, offset = 0 } = req.query
   try {
     const conditions = ['club_id=$1']
@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/articles/:id
 router.get('/:id', async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [article] } = await pool.query(
       `SELECT a.*, u.name AS author_name
@@ -46,7 +46,7 @@ router.get('/:id', async (req, res) => {
 
 // POST /api/articles  (admin)
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { type, title, subtitle, body, image_data, image_type, gallery_images, is_pinned, published_at } = req.body
   if (!type || !title) return res.status(400).json({ message: 'type and title are required.' })
   if (!['competition','news','achievement'].includes(type))
@@ -70,7 +70,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 
 // PUT /api/articles/:id  (admin)
 router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { type, title, subtitle, body, image_data, image_type, gallery_images, is_pinned, published_at } = req.body
   if (type && !['competition','news','achievement'].includes(type))
     return res.status(400).json({ message: 'Invalid type.' })
@@ -100,7 +100,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
 
 // DELETE /api/articles/:id  (admin)
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `DELETE FROM club_articles WHERE id=$1 AND club_id=$2 RETURNING id`,

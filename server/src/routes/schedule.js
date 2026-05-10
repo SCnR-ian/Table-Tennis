@@ -5,7 +5,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth')
 // GET /api/schedule  — returns active rows for members, all rows for admin
 router.get('/', async (req, res) => {
   try {
-    const clubId  = req.club?.id ?? 1
+    const clubId  = req.club?.id ?? req.user?.club_id ?? null
     // If ?all=1 and admin, return every row (including inactive)
     const showAll = req.query.all === '1'
     const { rows } = await pool.query(
@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
 // PATCH /api/schedule/:id  (admin) — update a single open-hours row
 router.patch('/:id', requireAuth, requireAdmin, async (req, res) => {
   const { day, start_time, end_time, label, is_active } = req.body
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const fields = []
     const vals   = []
@@ -45,7 +45,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { day, start_time, end_time, label } = req.body
   if (!day || !start_time || !end_time || !label)
     return res.status(400).json({ message: 'day, start_time, end_time and label are required.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [row] } = await pool.query(
       `INSERT INTO schedule (day, start_time, end_time, label, club_id) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
@@ -57,7 +57,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 
 // DELETE /api/schedule/:id  (admin)
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rowCount } = await pool.query(
       'DELETE FROM schedule WHERE id=$1 AND club_id=$2',

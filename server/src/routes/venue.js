@@ -54,7 +54,7 @@ function durationStr(ms) {
 
 // GET /api/venue/status  — today's check-in status for current user
 router.get('/status', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT checked_in_at, checked_out_at FROM venue_checkins
@@ -73,7 +73,7 @@ router.get('/status', requireAuth, async (req, res) => {
 
 // POST /api/venue/checkin
 router.post('/checkin', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { token } = req.body
   try {
     const { rows: [club] } = await pool.query(
@@ -147,7 +147,7 @@ router.post('/checkin', requireAuth, async (req, res) => {
 
 // POST /api/venue/checkout
 router.post('/checkout', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { token } = req.body
   try {
     const { rows: [club] } = await pool.query(
@@ -193,7 +193,7 @@ router.post('/checkout', requireAuth, async (req, res) => {
 router.get('/today', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin')
     return res.status(403).json({ message: 'Admin only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const date = req.query.date ?? new Date().toISOString().slice(0, 10)
   try {
     const { rows } = await pool.query(
@@ -213,7 +213,7 @@ router.get('/today', requireAuth, async (req, res) => {
 router.get('/qr', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin')
     return res.status(403).json({ message: 'Admin only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     let { rows: [club] } = await pool.query(
       'SELECT qr_token, name FROM clubs WHERE id=$1', [clubId]
@@ -237,7 +237,7 @@ router.get('/qr', requireAuth, async (req, res) => {
 router.post('/qr/regenerate', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin')
     return res.status(403).json({ message: 'Admin only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const token = crypto.randomBytes(32).toString('hex')
     await pool.query('UPDATE clubs SET qr_token=$1 WHERE id=$2', [token, clubId])
@@ -248,7 +248,7 @@ router.post('/qr/regenerate', requireAuth, async (req, res) => {
 
 // GET /api/venue/history  — member's own venue check-in history
 router.get('/history', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT date, checked_in_at, checked_out_at

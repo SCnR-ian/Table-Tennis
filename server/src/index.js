@@ -6,6 +6,8 @@ const session        = require('express-session')
 const passport       = require('./config/passport')
 const cron           = require('node-cron')
 
+const rateLimit = require('express-rate-limit')
+
 const app  = express()
 const PORT = process.env.PORT || 8000
 
@@ -46,6 +48,22 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 const { tenantMiddleware } = require('./middleware/tenant')
 app.use(tenantMiddleware)
 
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please try again in 15 minutes.' },
+})
+const feedbackLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many feedback submissions. Please try again later.' },
+})
+
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth',          require('./routes/auth'))
 app.use('/api/profile',       require('./routes/profile'))
@@ -72,7 +90,7 @@ app.use('/api/ai',           require('./routes/ai'))
 app.use('/api/finance',      require('./routes/finance'))
 
 // ── Platform feedback ─────────────────────────────────────────────────────────
-app.post('/api/feedback', async (req, res) => {
+app.post('/api/feedback', feedbackLimiter, async (req, res) => {
   const { message, name, email, page } = req.body
   if (!message?.trim()) return res.status(400).json({ error: 'Message is required.' })
   const { sendFeedback } = require('./utils/email')

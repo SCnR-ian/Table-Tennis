@@ -15,7 +15,7 @@ const upload = multer({
 // GET /api/pages/content — all page content sections (public)
 router.get('/content', async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'SELECT id, content FROM page_content WHERE club_id=$1',
       [clubId]
@@ -31,7 +31,7 @@ router.put('/content/:id', requireAuth, requireAdmin, async (req, res) => {
   if (!content || typeof content !== 'object')
     return res.status(400).json({ message: 'content object is required.' })
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     await pool.query(
       `INSERT INTO page_content (id, club_id, content, updated_at)
        VALUES ($1, $2, $3, NOW())
@@ -45,7 +45,7 @@ router.put('/content/:id', requireAuth, requireAdmin, async (req, res) => {
 // GET /api/pages/image-ids?prefix=... — list populated image IDs (public)
 router.get('/image-ids', async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { prefix } = req.query
     let q = 'SELECT id FROM page_images WHERE image_data IS NOT NULL AND club_id=$1'
     const params = [clubId]
@@ -58,7 +58,7 @@ router.get('/image-ids', async (req, res) => {
 // GET /api/pages/images/:id — serve a page image (public)
 router.get('/images/:id', async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'SELECT image_data, image_filename FROM page_images WHERE id=$1 AND club_id=$2',
       [req.params.id, clubId]
@@ -77,7 +77,7 @@ router.get('/images/:id', async (req, res) => {
 router.post('/images/:id', requireAuth, requireAdmin, upload.single('image'), async (req, res) => {
   if (!req.file) return res.status(400).json({ message: 'No image file provided.' })
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const imageData = req.file.buffer.toString('base64')
     await pool.query(
       `INSERT INTO page_images (id, club_id, image_data, image_filename, updated_at)
@@ -92,7 +92,7 @@ router.post('/images/:id', requireAuth, requireAdmin, upload.single('image'), as
 // DELETE /api/pages/images/:id — remove a page image (admin)
 router.delete('/images/:id', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     await pool.query(
       'DELETE FROM page_images WHERE id=$1 AND club_id=$2',
       [req.params.id, clubId]

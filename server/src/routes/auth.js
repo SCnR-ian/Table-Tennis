@@ -1,10 +1,19 @@
-const router   = require('express').Router()
-const bcrypt   = require('bcryptjs')
-const jwt      = require('jsonwebtoken')
-const crypto   = require('crypto')
-const passport = require('../config/passport')
-const pool     = require('../db')
+const router    = require('express').Router()
+const bcrypt    = require('bcryptjs')
+const jwt       = require('jsonwebtoken')
+const crypto    = require('crypto')
+const rateLimit = require('express-rate-limit')
+const passport  = require('../config/passport')
+const pool      = require('../db')
 const { Resend } = require('resend')
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many login attempts. Please try again in 15 minutes.' },
+})
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@flinther.com'
@@ -84,7 +93,7 @@ router.get('/verify-email', async (req, res) => {
 
 // POST /api/auth/login
 // `identifier` accepts either an email address or a phone number
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { identifier, password } = req.body
   if (!identifier || !password)
     return res.status(400).json({ message: 'Email/phone and password are required.' })
@@ -253,7 +262,7 @@ router.post('/reset-password', async (req, res) => {
 router.get('/google', (req, res, next) => {
   // Store the current club in session so the OAuth callback knows which club
   // to create/link the user against
-  req.session.oauthClubId = req.club?.id ?? 1
+  req.session.oauthClubId = req.club?.id ?? req.user?.club_id ?? null
   passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next)
 })
 

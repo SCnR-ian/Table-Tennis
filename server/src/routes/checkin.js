@@ -107,7 +107,7 @@ router.post('/coaching/:sessionId', requireAuth, async (req, res) => {
     // Deduct session price when first checked in
     if (rowCount > 0) {
       const sessionType = rows[0].group_id ? 'group' : 'solo'
-      const clubId = req.club?.id ?? 1
+      const clubId = req.club?.id ?? req.user?.club_id ?? null
       const { rows: [priceRow] } = await client.query(
         'SELECT price FROM coaching_prices WHERE session_type=$1 AND club_id=$2',
         [sessionType, clubId]
@@ -155,7 +155,7 @@ router.post('/coaching/:sessionId/no-show', requireAuth, async (req, res) => {
       [studentId, req.params.sessionId, rows[0].date, req.user.id]
     )
     if (rowCount > 0) {
-      const clubId = req.club?.id ?? 1
+      const clubId = req.club?.id ?? req.user?.club_id ?? null
       const sessionType = rows[0].group_id ? 'group' : 'solo'
       const { rows: [priceRow] } = await client.query(
         'SELECT price FROM coaching_prices WHERE session_type=$1 AND club_id=$2',
@@ -199,7 +199,7 @@ router.get('/admin', requireAuth, async (req, res) => {
   const { date } = req.query
   if (!date) return res.status(400).json({ message: 'date is required.' })
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       `SELECT ci.type, ci.reference_id, ci.user_id, ci.checked_in_at, ci.no_show,
               u.name AS user_name
@@ -219,7 +219,7 @@ router.get('/today-summary', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin')
     return res.status(403).json({ message: 'Admin only.' })
   const date = req.query.date ?? TODAY()
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     // ── Bookings ─────────────────────────────────────────────────────────────
     const { rows: bookings } = await pool.query(`

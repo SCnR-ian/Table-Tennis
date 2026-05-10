@@ -12,7 +12,7 @@ const safeUser = (u) => ({
 // GET /api/profile
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const clubId = req.club?.id ?? req.user.club_id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'SELECT * FROM users WHERE id=$1 AND club_id=$2',
       [req.user.id, clubId]
@@ -51,7 +51,7 @@ router.put('/', requireAuth, async (req, res) => {
 
     // Notify all admins via message
     if (nameChanging) {
-      const clubId = req.club?.id ?? req.user.club_id ?? 1
+      const clubId = req.club?.id ?? req.user?.club_id ?? null
       const { rows: admins } = await pool.query(
         `SELECT id FROM users WHERE role='admin' AND club_id=$1`,
         [clubId]

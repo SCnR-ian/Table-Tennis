@@ -46,7 +46,7 @@ const SESSION_COLS = `
 router.get('/', async (req, res) => {
   softAuth(req)
   const userId = req.user?.id ?? null
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: sessions } = await pool.query(
       `SELECT ${SESSION_COLS}
@@ -88,7 +88,7 @@ router.get('/', async (req, res) => {
 
 // GET /api/social/my-sessions — all sessions the current user has joined (including past)
 router.get('/my-sessions', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT s.id, s.title, s.date, s.start_time, s.end_time, s.price_cents, s.num_courts
@@ -107,7 +107,7 @@ router.get('/admin', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin')
     return res.status(403).json({ message: 'Admin only.' })
   const { date } = req.query
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const whereClause = date
       ? 'WHERE s.date = $1 AND s.club_id = $2'
@@ -201,7 +201,7 @@ router.post('/', requireAuth, async (req, res) => {
   if (!date || !start_time || !end_time)
     return res.status(400).json({ message: 'date, start_time, end_time are required.' })
 
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const dates = []
   const baseDate = new Date(date + 'T12:00:00')
   for (let i = 0; i < numWeeks; i++) {
@@ -270,7 +270,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin')
     return res.status(403).json({ message: 'Admin only.' })
 
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { num_courts, start_time, end_time, title, max_players, date, price_cents } = req.body
     const updates = []
@@ -332,7 +332,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
 
 // PATCH /api/social/recurrence/:recurrenceId  — bulk-edit all future sessions in a series
 router.patch('/recurrence/:recurrenceId', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { recurrenceId } = req.params
   const { title, start_time, end_time, max_players, num_courts, price_cents } = req.body
   try {
@@ -362,7 +362,7 @@ router.patch('/recurrence/:recurrenceId', requireAuth, requireAdmin, async (req,
 // DELETE /api/social/recurrence/:recurrenceId
 router.delete('/recurrence/:recurrenceId', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rowCount } = await pool.query(
       `DELETE FROM social_play_sessions WHERE recurrence_id=$1 AND date >= CURRENT_DATE AND club_id=$2`,
       [req.params.recurrenceId, clubId]
@@ -373,7 +373,7 @@ router.delete('/recurrence/:recurrenceId', requireAuth, requireAdmin, async (req
 
 // DELETE /api/social/batch  — cancel specific session IDs (admin)
 router.delete('/batch', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { ids } = req.body
   if (!Array.isArray(ids) || ids.length === 0)
     return res.status(400).json({ message: 'ids array is required.' })
@@ -391,7 +391,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
   if (req.user.role !== 'admin')
     return res.status(403).json({ message: 'Admin only.' })
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'SELECT id FROM social_play_sessions WHERE id=$1 AND club_id=$2',
       [req.params.id, clubId]
@@ -404,7 +404,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
 
 // POST /api/social/:id/join
 router.post('/:id/join', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -486,7 +486,7 @@ router.post('/:id/join', requireAuth, async (req, res) => {
 
 // DELETE /api/social/:id/join
 router.delete('/:id/join', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     // Check session exists and enforce 24h cancellation window
     const { rows: sessionRows } = await pool.query(
@@ -536,7 +536,7 @@ router.delete('/:id/join', requireAuth, async (req, res) => {
 
 // GET /api/social/:id/busy-members  (admin) — user IDs that have a conflicting activity
 router.get('/:id/busy-members', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: sess } = await pool.query(
       'SELECT date, start_time, end_time FROM social_play_sessions WHERE id=$1 AND club_id=$2',
@@ -574,7 +574,7 @@ router.get('/:id/busy-members', requireAuth, requireAdmin, async (req, res) => {
 // POST /api/social/:id/participants  (admin)
 router.post('/:id/participants', requireAuth, requireAdmin, async (req, res) => {
   const { user_id } = req.body
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   if (!user_id) return res.status(400).json({ message: 'user_id is required.' })
   const client = await pool.connect()
   try {
@@ -631,7 +631,7 @@ router.post('/:id/participants', requireAuth, requireAdmin, async (req, res) => 
 
 // POST /api/social/:id/walkin  (admin)
 router.post('/:id/walkin', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -660,7 +660,7 @@ router.post('/:id/walkin', requireAuth, requireAdmin, async (req, res) => {
 
 // DELETE /api/social/:id/participants/:userId  (admin)
 router.delete('/:id/participants/:userId', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT spp.payment_intent_id, u.name AS user_name,

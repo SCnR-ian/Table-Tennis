@@ -23,7 +23,7 @@ const safeUser = (u) => ({
 // GET /api/admin/stats
 router.get('/stats', async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const [members, bookings, tournaments] = await Promise.all([
       pool.query("SELECT COUNT(*)::int FROM users WHERE role='member' AND club_id=$1", [clubId]),
       pool.query("SELECT COUNT(*)::int FROM bookings WHERE status='confirmed' AND club_id=$1", [clubId]),
@@ -43,7 +43,7 @@ router.post('/members', async (req, res) => {
   if (!name?.trim() || !email?.trim() || !password)
     return res.status(400).json({ message: 'Name, email and password are required.' })
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const hash = await bcrypt.hash(password, 12)
     const { rows } = await pool.query(
       'INSERT INTO users (name, email, password_hash, phone, club_id) VALUES ($1,$2,$3,$4,$5) RETURNING *',
@@ -59,7 +59,7 @@ router.post('/members', async (req, res) => {
 // GET /api/admin/members
 router.get('/members', async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'SELECT * FROM users WHERE is_walkin IS NOT TRUE AND club_id=$1 ORDER BY created_at DESC',
       [clubId]
@@ -74,7 +74,7 @@ router.patch('/members/:id', async (req, res) => {
   if (!name?.trim() && !email?.trim())
     return res.status(400).json({ message: 'Nothing to update.' })
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const updates = [], values = []
     if (name?.trim())  { updates.push(`name=$${values.length+1}`);  values.push(name.trim()) }
     if (email?.trim()) { updates.push(`email=$${values.length+1}`); values.push(email.toLowerCase().trim()) }
@@ -97,7 +97,7 @@ router.put('/members/:id/role', async (req, res) => {
   const { role } = req.body
   if (!['member', 'admin', 'coach'].includes(role))
     return res.status(400).json({ message: 'Invalid role.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const client = await pool.connect()
   try {
     // Block demotion if the coach has future confirmed sessions
@@ -132,7 +132,7 @@ router.post('/members/:id/make-coach', upload.single('resume'), async (req, res)
   const availability_end   = req.body.availability_end   || null
   const bio                = req.body.bio                || null
   const userId = req.params.id
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
@@ -170,7 +170,7 @@ router.patch('/coaches/:id/status', async (req, res) => {
   if (typeof is_active !== 'boolean')
     return res.status(400).json({ message: 'is_active (boolean) required.' })
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'UPDATE coaches SET is_active=$1 WHERE id=$2 AND club_id=$3 RETURNING id, name, is_active',
       [is_active, req.params.id, clubId]
@@ -183,7 +183,7 @@ router.patch('/coaches/:id/status', async (req, res) => {
 // GET /api/admin/coaches/:id/resume
 router.get('/coaches/:id/resume', async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'SELECT resume_filename, resume_data FROM coaches WHERE id=$1 AND club_id=$2',
       [req.params.id, clubId]
@@ -204,7 +204,7 @@ router.patch('/members/:id/status', async (req, res) => {
   if (typeof is_active !== 'boolean')
     return res.status(400).json({ message: 'is_active (boolean) required.' })
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(
       'UPDATE users SET is_active=$1, updated_at=NOW() WHERE id=$2 AND club_id=$3 RETURNING *',
       [is_active, req.params.id, clubId]
@@ -219,7 +219,7 @@ router.delete('/members/:id', async (req, res) => {
   if (String(req.params.id) === String(req.user.id))
     return res.status(400).json({ message: 'You cannot delete your own account.' })
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rowCount } = await pool.query(
       'DELETE FROM users WHERE id=$1 AND club_id=$2',
       [req.params.id, clubId]
@@ -235,7 +235,7 @@ router.delete('/members/:id', async (req, res) => {
 // GET /api/admin/members/:userId/activities
 router.get('/members/:userId/activities', async (req, res) => {
   const { userId } = req.params
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const userRes = await pool.query(
       'SELECT id,name,email,role,phone,avatar_url,created_at FROM users WHERE id=$1 AND club_id=$2',
@@ -328,7 +328,7 @@ router.get('/members/:userId/activities', async (req, res) => {
 // GET /api/admin/bookings?date=YYYY-MM-DD
 router.get('/bookings', async (req, res) => {
   const { date } = req.query
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const params = date ? [clubId, date] : [clubId]
     const { rows } = await pool.query(

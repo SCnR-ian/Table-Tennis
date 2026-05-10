@@ -12,7 +12,7 @@ router.use(requireAuth, requireAdmin)
 //   attendance     – per-member activity count + last active date
 router.get('/overview', async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
 
     // ── 1. Member growth (last 12 weeks, grouped by week) ─────────────────────
     const { rows: growthRows } = await pool.query(`

@@ -27,7 +27,7 @@ async function getReactions(messageIds, viewerId) {
 
 // GET /api/messages/admins  — any authenticated user can fetch the club's admin list
 router.get('/admins', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT id, name FROM users WHERE role='admin' AND club_id=$1 ORDER BY name`,
@@ -190,7 +190,7 @@ router.post('/', requireAuth, async (req, res) => {
     return res.status(403).json({ message: 'Only admins can send announcements.' })
 
   if (recipient_id && req.user.role !== 'admin') {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query('SELECT role FROM users WHERE id=$1 AND club_id=$2', [recipient_id, clubId])
     if (!rows[0] || rows[0].role !== 'admin')
       return res.status(403).json({ message: 'Members can only message admins.' })

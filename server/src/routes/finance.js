@@ -5,7 +5,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth')
 // ── Cash transactions ─────────────────────────────────────────────────────────
 
 router.post('/cash', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { amount, category, description, member_id, type } = req.body
   if (!amount || isNaN(amount) || Number(amount) <= 0)
     return res.status(400).json({ message: 'Valid amount required.' })
@@ -26,7 +26,7 @@ router.post('/cash', requireAuth, requireAdmin, async (req, res) => {
 })
 
 router.get('/cash', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { from, to } = req.query
   try {
     const { rows } = await pool.query(
@@ -46,7 +46,7 @@ router.get('/cash', requireAuth, requireAdmin, async (req, res) => {
 })
 
 router.delete('/cash/:id', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rowCount } = await pool.query(
       `DELETE FROM cash_transactions WHERE id=$1 AND club_id=$2`,
@@ -60,7 +60,7 @@ router.delete('/cash/:id', requireAuth, requireAdmin, async (req, res) => {
 // ── Recurring expenses ────────────────────────────────────────────────────────
 
 router.get('/recurring', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT * FROM recurring_expenses WHERE club_id=$1 ORDER BY id`,
@@ -71,7 +71,7 @@ router.get('/recurring', requireAuth, requireAdmin, async (req, res) => {
 })
 
 router.post('/recurring', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { description, amount, category } = req.body
   if (!description?.trim() || !amount || isNaN(amount) || Number(amount) <= 0)
     return res.status(400).json({ message: 'Description and valid amount required.' })
@@ -86,7 +86,7 @@ router.post('/recurring', requireAuth, requireAdmin, async (req, res) => {
 })
 
 router.put('/recurring/:id', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { description, amount, category, is_active } = req.body
   try {
     const { rows: [row] } = await pool.query(
@@ -104,7 +104,7 @@ router.put('/recurring/:id', requireAuth, requireAdmin, async (req, res) => {
 })
 
 router.delete('/recurring/:id', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rowCount } = await pool.query(
       `DELETE FROM recurring_expenses WHERE id=$1 AND club_id=$2`,
@@ -118,7 +118,7 @@ router.delete('/recurring/:id', requireAuth, requireAdmin, async (req, res) => {
 // ── Coach pay rates ───────────────────────────────────────────────────────────
 
 router.get('/coach-rates', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT id, name, pay_rate_per_session FROM coaches
@@ -130,7 +130,7 @@ router.get('/coach-rates', requireAuth, requireAdmin, async (req, res) => {
 })
 
 router.put('/coach-rates/:id', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { pay_rate_per_session } = req.body
   if (pay_rate_per_session !== null && (isNaN(pay_rate_per_session) || Number(pay_rate_per_session) < 0))
     return res.status(400).json({ message: 'Invalid rate.' })
@@ -147,7 +147,7 @@ router.put('/coach-rates/:id', requireAuth, requireAdmin, async (req, res) => {
 // ── Unified finance report ────────────────────────────────────────────────────
 
 router.get('/report', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const from = req.query.from || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
   const to   = req.query.to   || new Date().toISOString().slice(0, 10)
 
@@ -283,7 +283,7 @@ router.get('/report', requireAuth, requireAdmin, async (req, res) => {
 
 // GET /api/finance/wallet/:userId
 router.get('/wallet/:userId', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: ledger } = await pool.query(
       `SELECT l.id, l.delta, l.note, l.session_type, l.created_at,
@@ -306,7 +306,7 @@ router.get('/wallet/:userId', requireAuth, requireAdmin, async (req, res) => {
 // POST /api/finance/wallet/:userId/topup  — credit or adjustment
 // Writes to coaching_hour_ledger AND (if positive) cash_transactions as income
 router.post('/wallet/:userId/topup', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { delta, note } = req.body
   if (!delta || isNaN(delta) || Number(delta) === 0)
     return res.status(400).json({ message: 'Non-zero delta required.' })

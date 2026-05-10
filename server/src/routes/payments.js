@@ -81,7 +81,7 @@ router.post("/authorize", requireAuth, async (req, res) => {
   const payment_mode = rawMode === 'immediate' ? 'immediate' : rawMode === 'hold' ? 'hold'
     : (type === 'booking' ? 'hold' : 'immediate');
 
-  const clubId = req.club?.id ?? 1;
+  const clubId = req.club?.id ?? req.user?.club_id ?? null;
   try {
     const stripe = getStripe();
     let amount, description, metadata;
@@ -215,7 +215,7 @@ router.post("/confirm-authorize", requireAuth, async (req, res) => {
       return res.status(403).json({ message: "Authorization does not belong to this user." });
     // Strict club validation
     const metaClubNum = Number(metaClub)
-    const currentClubId = req.club?.id ?? 1
+    const currentClubId = req.club?.id ?? req.user?.club_id ?? null
     if (!metaClubNum || metaClubNum !== currentClubId) {
       await client.query("ROLLBACK")
       await stripe.paymentIntents.cancel(intentId).catch(() => {})
@@ -348,7 +348,7 @@ router.post("/authorize-extension", requireAuth, async (req, res) => {
   if (!groupId || !extra || extra % 30 !== 0 || extra <= 0)
     return res.status(400).json({ message: "groupId and extra_minutes (multiple of 30) are required." });
 
-  const clubId = req.club?.id ?? 1;
+  const clubId = req.club?.id ?? req.user?.club_id ?? null;
   try {
     const { rows } = await pool.query(
       `SELECT user_id, date, MAX(end_time) AS end_time FROM bookings
@@ -430,7 +430,7 @@ router.post("/shop-intent", requireAuth, async (req, res) => {
   if (!Array.isArray(items) || items.length === 0)
     return res.status(400).json({ message: "items array is required." });
 
-  const clubId = req.club?.id ?? 1;
+  const clubId = req.club?.id ?? req.user?.club_id ?? null;
   try {
     const stripe = getStripe();
 

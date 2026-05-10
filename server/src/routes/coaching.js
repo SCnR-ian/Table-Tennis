@@ -29,25 +29,25 @@ async function ledgerEntry(client, userId, delta, note, sessionId, createdBy, cl
   await client.query(
     `INSERT INTO coaching_hour_ledger (user_id, delta, note, session_id, created_by, club_id)
      VALUES ($1, $2, $3, $4, $5, $6)`,
-    [userId, delta, note, sessionId ?? null, createdBy ?? null, clubId ?? 1]
+    [userId, delta, note, sessionId ?? null, createdBy ?? null, clubId ?? null]
   )
   if (delta < 0) {
     const { rows: [bal] } = await client.query(
       `SELECT COALESCE(SUM(delta), 0)::numeric AS balance FROM coaching_hour_ledger WHERE user_id=$1 AND club_id=$2`,
-      [userId, clubId ?? 1]
+      [userId, clubId ?? null]
     )
     if (Number(bal.balance) < 0) {
       pool.query(
         `SELECT a.id AS admin_id, u.name AS student_name
          FROM users a JOIN users u ON u.id=$1
          WHERE a.role='admin' AND a.club_id=$2 LIMIT 1`,
-        [userId, clubId ?? 1]
+        [userId, clubId ?? null]
       ).then(({ rows: [row] }) => {
         if (!row) return
         const balance = Math.round(Number(bal.balance) * 100) / 100
         pool.query(
           `INSERT INTO messages (sender_id, recipient_id, body, club_id) VALUES ($1,$2,$3,$4)`,
-          [userId, row.admin_id, `⚠️ Coaching balance alert: ${row.student_name}'s balance is now $${balance}.`, clubId ?? 1]
+          [userId, row.admin_id, `⚠️ Coaching balance alert: ${row.student_name}'s balance is now $${balance}.`, clubId ?? null]
         ).catch(() => {})
       }).catch(() => {})
     }
@@ -90,7 +90,7 @@ function fmtTime(t) {
 
 // GET /api/coaching/coaches/public — no auth, returns name + avg rating per coach
 router.get('/coaches/public', async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT c.id, c.name,
@@ -110,7 +110,7 @@ router.get('/coaches/public', async (req, res) => {
 
 // GET /api/coaching/coaches
 router.get('/coaches', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT co.*, u.email, u.phone FROM coaches co
@@ -127,7 +127,7 @@ router.get('/coaches', requireAuth, requireAdmin, async (req, res) => {
 // POST /api/coaching/coaches  — body: { name, bio, user_id? }
 // If user_id is provided, the linked user's role is set to 'coach'.
 router.post('/coaches', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { name, bio, user_id } = req.body
   if (!name?.trim()) return res.status(400).json({ message: 'name is required.' })
   const client = await pool.connect()
@@ -161,7 +161,7 @@ router.post('/coaches', requireAuth, requireAdmin, async (req, res) => {
 
 // DELETE /api/coaching/coaches/by-user/:userId  — remove coach record by linked user id
 router.delete('/coaches/by-user/:userId', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     await pool.query('DELETE FROM coaches WHERE user_id=$1 AND club_id=$2', [req.params.userId, clubId])
     res.json({ message: 'Coach removed.' })
@@ -174,7 +174,7 @@ router.delete('/coaches/by-user/:userId', requireAuth, requireAdmin, async (req,
 
 // DELETE /api/coaching/coaches/:id
 router.delete('/coaches/:id', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rowCount } = await pool.query('DELETE FROM coaches WHERE id=$1 AND club_id=$2', [req.params.id, clubId])
     if (rowCount === 0) return res.status(404).json({ message: 'Coach not found.' })
@@ -190,7 +190,7 @@ router.delete('/coaches/:id', requireAuth, requireAdmin, async (req, res) => {
 
 // GET /api/coaching/sessions?date=YYYY-MM-DD
 router.get('/sessions', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { date } = req.query
   try {
     const { rows } = await pool.query(
@@ -241,7 +241,7 @@ router.get('/sessions', requireAuth, requireAdmin, async (req, res) => {
 // weeks >= 2 → generate that many weekly instances sharing a recurrence_id
 // Pass recurrence_id to append new sessions into an existing series (e.g. makeup sessions)
 router.post('/sessions', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { coach_id, student_id, date, start_time, end_time, notes, weeks, recurrence_id: existingRecurrenceId } = req.body
 
   if (!coach_id || !student_id || !date || !start_time || !end_time)
@@ -471,7 +471,7 @@ router.post('/sessions', requireAuth, requireAdmin, async (req, res) => {
 
 // GET /api/coaching/sessions/groups?date=YYYY-MM-DD  (admin) — group sessions, each row = one group
 router.get('/sessions/groups', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { date } = req.query
   try {
     const { rows } = await pool.query(
@@ -545,7 +545,7 @@ router.get('/sessions/groups', requireAuth, requireAdmin, async (req, res) => {
 // body: { coach_id, student_ids: [id,...] (2-5), date, start_time, end_time, notes, weeks }
 // All students share ONE court and ONE group_id. Each student gets their own recurrence_id series.
 router.post('/sessions/group', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { coach_id, student_ids, date, start_time, end_time, notes, weeks } = req.body
 
   if (!coach_id || !Array.isArray(student_ids) || !date || !start_time || !end_time)
@@ -754,7 +754,7 @@ router.post('/sessions/group', requireAuth, requireAdmin, async (req, res) => {
 // POST /api/coaching/sessions/group/:groupId/add-student  (admin)
 // body: { student_id, from_date? }  — adds student to all confirmed sessions from from_date onwards
 router.post('/sessions/group/:groupId/add-student', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { student_id, from_date } = req.body
   if (!student_id) return res.status(400).json({ message: 'student_id is required.' })
 
@@ -847,7 +847,7 @@ router.post('/sessions/group/:groupId/add-student', requireAuth, requireAdmin, a
 // Cancels confirmed sessions for one student in the group from from_date onwards
 // Query param: from_date (defaults to today)
 router.delete('/sessions/group/:groupId/remove-student/:studentId', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const fromDate = req.query.from_date || new Date().toISOString().slice(0, 10)
 
   // Check min 1 student — ensure no affected date would drop to 0
@@ -884,7 +884,7 @@ router.delete('/sessions/group/:groupId/remove-student/:studentId', requireAuth,
 
 // DELETE /api/coaching/sessions/group/:groupId  (admin) — cancel all confirmed sessions in a group
 router.delete('/sessions/group/:groupId', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const client = await pool.connect()
   try {
     const { rowCount } = await client.query(
@@ -902,7 +902,7 @@ router.delete('/sessions/group/:groupId', requireAuth, requireAdmin, async (req,
 
 // DELETE /api/coaching/sessions/recurrence/:recurrenceId  — must be before /:id
 router.delete('/sessions/recurrence/:recurrenceId', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rowCount } = await pool.query(
       `UPDATE coaching_sessions SET status='cancelled'
@@ -915,7 +915,7 @@ router.delete('/sessions/recurrence/:recurrenceId', requireAuth, requireAdmin, a
 
 // DELETE /api/coaching/sessions/:id  — admin, the assigned student, or the coach can cancel
 router.delete('/sessions/:id', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT cs.*, c.user_id AS coach_user_id
@@ -961,7 +961,7 @@ router.delete('/sessions/:id', requireAuth, async (req, res) => {
 
 // POST /api/coaching/sessions/:id/leave  — record a leave without cancelling (used for move-to-end)
 router.post('/sessions/:id/leave', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       'SELECT * FROM coaching_sessions WHERE id=$1 AND club_id=$2',
@@ -992,7 +992,7 @@ router.post('/sessions/:id/leave', requireAuth, requireAdmin, async (req, res) =
 // per-session check-in status for both the student and the coach.
 // A session "counts" toward pay only when BOTH have checked in.
 router.get('/payment-report', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { from, to } = req.query
   if (!from || !to) return res.status(400).json({ message: 'from and to dates are required.' })
   try {
@@ -1123,7 +1123,7 @@ router.get('/payment-report', requireAuth, requireAdmin, async (req, res) => {
 
 // GET /api/coaching/my-coach-sessions  — upcoming sessions the logged-in coach is teaching
 router.get('/my-coach-sessions', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: coachRows } = await pool.query(
       'SELECT id FROM coaches WHERE user_id=$1 AND club_id=$2',
@@ -1286,7 +1286,7 @@ function rescheduleConflictResponse(err, res) {
 // PUT /api/coaching/sessions/reschedule-bulk  (admin) — move multiple sessions at once
 // body: { updates: [{ id, date, start_time?, end_time? }] }
 router.put('/sessions/reschedule-bulk', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { updates } = req.body
   if (!Array.isArray(updates) || !updates.length)
     return res.status(400).json({ message: 'updates array is required.' })
@@ -1354,7 +1354,7 @@ router.put('/sessions/reschedule-bulk', requireAuth, requireAdmin, async (req, r
 // PUT /api/coaching/sessions/group/:groupId/reschedule  (admin) — move all sessions in a group
 // body: { date, start_time?, end_time? }
 router.put('/sessions/group/:groupId/reschedule', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { groupId } = req.params
   const { date, start_time, end_time } = req.body
   if (!date) return res.status(400).json({ message: 'date is required.' })
@@ -1479,7 +1479,7 @@ router.put('/sessions/group/:groupId/reschedule', requireAuth, requireAdmin, asy
 // PUT /api/coaching/sessions/:id/reschedule  (admin) — move a single session to a new date/time
 // body: { date: 'YYYY-MM-DD', start_time?, end_time? }
 router.put('/sessions/:id/reschedule', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { date, start_time, end_time } = req.body
   if (!date) return res.status(400).json({ message: 'date is required.' })
   const client = await pool.connect()
@@ -1514,7 +1514,7 @@ router.put('/sessions/:id/reschedule', requireAuth, requireAdmin, async (req, re
 // series_used   = sessions that have been "counted" (admin checked-in OR both student+coach checked in)
 // sessions_left = series_total - series_used
 router.get('/my', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `WITH session_checkins AS (
@@ -1587,7 +1587,7 @@ router.get('/my', requireAuth, async (req, res) => {
 
 // GET /api/coaching/hours/:userId  — combined balance + recent transactions (admin or self)
 router.get('/hours/:userId', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const targetId = Number(req.params.userId)
   if (req.user.role !== 'admin' && req.user.id !== targetId)
     return res.status(403).json({ message: 'Forbidden.' })
@@ -1613,7 +1613,7 @@ router.get('/hours/:userId', requireAuth, async (req, res) => {
 // POST /api/coaching/hours/:userId  — admin manually credits or debits dollars
 // body: { delta, note }
 router.post('/hours/:userId', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const targetId = Number(req.params.userId)
   const { delta, note } = req.body
   if (delta === undefined || delta === null || delta === 0)
@@ -1661,7 +1661,7 @@ router.post('/hours/:userId', requireAuth, requireAdmin, async (req, res) => {
 
 // GET /api/coaching/reviews/recent  — admin: recent sessions with any feedback (coach or student)
 router.get('/reviews/recent', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const limit  = Math.min(parseInt(req.query.limit) || 50, 100)
   try {
     const { rows } = await pool.query(
@@ -1702,7 +1702,7 @@ router.get('/reviews/session/:sessionId', requireAuth, async (req, res) => {
 // POST /api/coaching/reviews  — coach creates a review for a session (also auto check-in)
 // body: { session_id, skills, body }
 router.post('/reviews', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { session_id, skills = [], body = '' } = req.body
   if (!session_id) return res.status(400).json({ message: 'session_id is required.' })
   if (!skills.length && !body.trim())
@@ -1762,7 +1762,7 @@ router.post('/reviews', requireAuth, async (req, res) => {
 // PUT /api/coaching/reviews/:id  — coach updates an existing review
 // body: { skills, body }
 router.put('/reviews/:id', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { skills = [], body = '' } = req.body
   try {
     const { rows } = await pool.query(
@@ -1779,7 +1779,7 @@ router.put('/reviews/:id', requireAuth, async (req, res) => {
 // POST /api/coaching/reviews/student  — student submits rating (1-5) + optional comment
 // body: { session_id, rating, comment? }
 router.post('/reviews/student', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { session_id, rating, comment = '' } = req.body
   if (!session_id) return res.status(400).json({ message: 'session_id is required.' })
   if (!rating || rating < 1 || rating > 5)
@@ -1809,7 +1809,7 @@ router.post('/reviews/student', requireAuth, async (req, res) => {
 
 // GET /api/coaching/my-history  — student sees all past sessions with attendance status
 router.get('/my-history', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT cs.id, cs.date, cs.start_time, cs.end_time,
@@ -1845,7 +1845,7 @@ router.get('/my-history', requireAuth, async (req, res) => {
 
 // GET /api/coaching/reviews/my  — student sees their reviews (with session info + skills)
 router.get('/reviews/my', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query(
       `SELECT cr.id, cr.skills, cr.body, cr.created_at, cr.updated_at,
@@ -1865,7 +1865,7 @@ router.get('/reviews/my', requireAuth, async (req, res) => {
 
 // GET /api/coaching/prices  — current session prices (admin only)
 router.get('/prices', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows } = await pool.query('SELECT session_type, price FROM coaching_prices WHERE club_id=$1', [clubId])
     const prices = Object.fromEntries(rows.map(r => [r.session_type, parseFloat(r.price)]))
@@ -1876,7 +1876,7 @@ router.get('/prices', requireAuth, requireAdmin, async (req, res) => {
 // PUT /api/coaching/prices  — update session prices (admin only)
 // body: { solo: 70, group: 50 }
 router.put('/prices', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { solo, group } = req.body
   if (solo === undefined || group === undefined || solo <= 0 || group <= 0)
     return res.status(400).json({ message: 'solo and group prices are required and must be positive.' })
@@ -1889,7 +1889,7 @@ router.put('/prices', requireAuth, requireAdmin, async (req, res) => {
 
 // GET /api/coaching/student-prices/:userId
 router.get('/student-prices/:userId', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const userId = Number(req.params.userId)
   try {
     // Fallback to global prices if no student-specific row
@@ -2000,7 +2000,7 @@ async function getAvailableSlots(clubId, coachId, durationMins, excludeSessionId
 // body: { session_id, reason? }
 router.post('/leave-requests', requireAuth, async (req, res) => {
   if (req.user.role !== 'member') return res.status(403).json({ message: 'Only members can submit leave requests.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { session_id, reason } = req.body
   if (!session_id) return res.status(400).json({ message: 'session_id is required.' })
   try {
@@ -2064,7 +2064,7 @@ router.post('/leave-requests', requireAuth, async (req, res) => {
 
 // POST /api/coaching/leave-requests/:id/approve  (admin)
 router.post('/leave-requests/:id/approve', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [lr] } = await pool.query(
       `SELECT slr.*, cs.coach_id, cs.start_time, cs.end_time, cs.date,
@@ -2121,7 +2121,7 @@ router.post('/leave-requests/:id/approve', requireAuth, requireAdmin, async (req
 
 // POST /api/coaching/leave-requests/:id/reject  (admin)
 router.post('/leave-requests/:id/reject', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [lr] } = await pool.query(
       `UPDATE session_leave_requests
@@ -2137,7 +2137,7 @@ router.post('/leave-requests/:id/reject', requireAuth, requireAdmin, async (req,
 // POST /api/coaching/leave-requests/:id/select-slot  (student)
 // body: { date, start_time, end_time }
 router.post('/leave-requests/:id/select-slot', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { date, start_time, end_time } = req.body
   if (!date || !start_time || !end_time) return res.status(400).json({ message: 'date, start_time and end_time are required.' })
 
@@ -2240,7 +2240,7 @@ router.post('/leave-requests/:id/select-slot', requireAuth, async (req, res) => 
 // Admin triggers coach leave → creates approved leave requests for each affected student
 // body: { coach_user_id, date_from, date_to?, reason? }
 router.post('/coach-leave', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { coach_user_id, date_from, date_to, reason } = req.body
   if (!coach_user_id || !date_from) return res.status(400).json({ message: 'coach_user_id and date_from are required.' })
 
@@ -2340,7 +2340,7 @@ router.post('/coach-leave', requireAuth, requireAdmin, async (req, res) => {
 // Returns the coach's confirmed sessions on a given date for session selection.
 router.get('/coach-sessions', requireAuth, async (req, res) => {
   if (req.user.role !== 'coach') return res.status(403).json({ message: 'Coaches only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { date } = req.query
   if (!date) return res.status(400).json({ message: 'date is required.' })
   try {
@@ -2361,7 +2361,7 @@ router.get('/coach-sessions', requireAuth, async (req, res) => {
 // POST /api/coaching/coach-leave-requests  (coach)
 // Coach submits a leave request with selected session IDs. Admin sees full list.
 router.post('/coach-leave-requests', requireAuth, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   if (req.user.role !== 'coach') return res.status(403).json({ message: 'Only coaches can submit leave requests.' })
 
   const { date_from, reason, session_ids } = req.body
@@ -2429,7 +2429,7 @@ router.post('/coach-leave-requests', requireAuth, async (req, res) => {
 // POST /api/coaching/coach-leave-requests/:id/approve  (admin)
 // Just approves the leave. Admin then assigns substitute coaches separately.
 router.post('/coach-leave-requests/:id/approve', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [lr] } = await pool.query(
       `SELECT clr.*, u.name AS coach_name
@@ -2466,7 +2466,7 @@ router.post('/coach-leave-requests/:id/approve', requireAuth, requireAdmin, asyn
 // Admin assigns substitute coaches for specific sessions.
 // body: { coverages: [{ session_id, sub_coach_id }] }
 router.post('/coach-leave-requests/:id/assign-cover', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { coverages } = req.body
   if (!Array.isArray(coverages) || coverages.length === 0)
     return res.status(400).json({ message: 'coverages array is required.' })
@@ -2551,7 +2551,7 @@ router.post('/coach-leave-requests/:id/assign-cover', requireAuth, requireAdmin,
 // body: { accept: true|false }
 router.post('/coverage-requests/:id/respond', requireAuth, async (req, res) => {
   if (req.user.role !== 'coach') return res.status(403).json({ message: 'Coaches only.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { accept } = req.body
 
   try {
@@ -2622,7 +2622,7 @@ router.post('/coverage-requests/:id/respond', requireAuth, async (req, res) => {
 // POST /api/coaching/coach-leave-requests/:id/offer-student-slots  (admin)
 // For uncovered sessions: cancel sessions and offer students makeup slots.
 router.post('/coach-leave-requests/:id/offer-student-slots', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [lr] } = await pool.query(
       `SELECT clr.*, u.name AS coach_name
@@ -2700,7 +2700,7 @@ router.post('/coach-leave-requests/:id/offer-student-slots', requireAuth, requir
 // POST /api/coaching/sessions/:sessionId/offer-student-slot  (admin)
 // Offer makeup slot options to the student of a single uncovered session.
 router.post('/sessions/:sessionId/offer-student-slot', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   const { sessionId } = req.params
   try {
     const { rows: [session] } = await pool.query(
@@ -2760,7 +2760,7 @@ router.post('/sessions/:sessionId/offer-student-slot', requireAuth, requireAdmin
 
 // POST /api/coaching/coach-leave-requests/:id/reject  (admin)
 router.post('/coach-leave-requests/:id/reject', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [lr] } = await pool.query(
       `SELECT * FROM coach_leave_requests WHERE id=$1 AND status='pending' AND club_id=$2`,

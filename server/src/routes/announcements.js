@@ -5,7 +5,7 @@ const { requireAuth, requireAdmin } = require('../middleware/auth')
 // GET /api/announcements
 router.get('/', async (req, res) => {
   try {
-    const clubId = req.club?.id ?? 1
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
     const limit = Math.min(parseInt(req.query.limit) || 20, 100)
     const { rows } = await pool.query(
       'SELECT * FROM announcements WHERE club_id=$1 ORDER BY created_at DESC LIMIT $2',
@@ -20,7 +20,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   const { title, body } = req.body
   if (!title?.trim() || !body?.trim())
     return res.status(400).json({ message: 'title and body are required.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [row] } = await pool.query(
       `INSERT INTO announcements (title, body, club_id) VALUES ($1,$2,$3) RETURNING *`,
@@ -35,7 +35,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
   const { title, body } = req.body
   if (!title?.trim() || !body?.trim())
     return res.status(400).json({ message: 'title and body are required.' })
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rows: [row] } = await pool.query(
       `UPDATE announcements SET title=$1, body=$2 WHERE id=$3 AND club_id=$4 RETURNING *`,
@@ -48,7 +48,7 @@ router.put('/:id', requireAuth, requireAdmin, async (req, res) => {
 
 // DELETE /api/announcements/:id  (admin)
 router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
-  const clubId = req.club?.id ?? 1
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
   try {
     const { rowCount } = await pool.query(
       'DELETE FROM announcements WHERE id=$1 AND club_id=$2',
