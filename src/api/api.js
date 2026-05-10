@@ -15,7 +15,7 @@ const api = axios.create({
 // Priority: real subdomain from hostname > VITE_CLUB_SUBDOMAIN env var.
 // Platform/deploy domains (vercel.app, etc.) are excluded so staging builds still work.
 ;(function setClubHeader() {
-  const PLATFORM = ['vercel.app','netlify.app','onrender.com','railway.app','fly.dev','github.io']
+  const PLATFORM = ['vercel.app','netlify.app','onrender.com','railway.app','fly.dev','github.io','pages.dev']
   const hostname = typeof window !== 'undefined' ? window.location.hostname : ''
   let subdomain = null
   if (hostname && hostname !== 'localhost' && !hostname.match(/^\d/)) {
