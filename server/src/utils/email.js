@@ -120,7 +120,9 @@ async function sendVerificationEmail({ to, name, token }) {
         <h2 style="font-size:20px;font-weight:600;margin-bottom:8px;">Verify your email</h2>
         <p style="color:#555;margin-bottom:28px;">Hi ${name || 'there'}, click the button below to verify your Flinther account.</p>
         <a href="${verifyUrl}" style="display:inline-block;background:#111;color:#fff;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:500;">Verify email →</a>
-        <p style="color:#aaa;font-size:12px;margin-top:28px;">This link expires in 24 hours. If you didn't sign up for Flinther, you can ignore this email.</p>
+        <p style="color:#888;font-size:12px;margin-top:20px;">If the button doesn't work, copy and paste this link into your browser:</p>
+        <p style="font-size:12px;word-break:break-all;color:#333;background:#f5f5f5;padding:10px 12px;border-radius:6px;">${verifyUrl}</p>
+        <p style="color:#aaa;font-size:12px;margin-top:16px;">This link expires in 24 hours. If you didn't sign up for Flinther, you can ignore this email.</p>
       `),
     })
   } catch (e) {
