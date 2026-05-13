@@ -126,7 +126,7 @@ function groupByWeek(sessions) {
 // ─── Constants ──────────────────────────────────────────────────────────────
 
 
-const TABS = ['Bookings', 'Members', 'Coaching', 'Social Play', 'Finance']
+const TABS = ['Bookings', 'Members', 'Coaching', 'Social Play', 'Finance', 'QR-Code', 'Shop', 'Articles']
 
 // Height in px of each 30-minute slot row in the calendar view.
 const SLOT_H = 48
