@@ -30,6 +30,7 @@ const safeUser = (u) => ({
   id: u.id, name: u.name, email: u.email,
   role: u.role, phone: u.phone, avatar_url: u.avatar_url,
   club_id: u.club_id,
+  platform_owner: u.platform_owner ?? false,
   name_changed_at: u.name_changed_at ?? null,
 })
 
