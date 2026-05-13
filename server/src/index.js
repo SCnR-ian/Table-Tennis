@@ -460,6 +460,16 @@ async function runMigrations() {
     `ALTER TABLE clubs ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(255)`,
     `ALTER TABLE clubs ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(255)`,
     `UPDATE clubs SET billing_exempt = TRUE WHERE subdomain = 'epping'`,
+    `CREATE TABLE IF NOT EXISTS coach_invites (
+       id         SERIAL PRIMARY KEY,
+       token      VARCHAR(64) NOT NULL UNIQUE,
+       club_id    INTEGER NOT NULL REFERENCES clubs(id),
+       created_by INTEGER NOT NULL REFERENCES users(id),
+       used_by    INTEGER REFERENCES users(id),
+       expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '7 days',
+       used_at    TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
   ]
   for (const sql of patches) {
     try { await pool.query(sql) } catch (e) { console.error('Migration warning:', e.message) }

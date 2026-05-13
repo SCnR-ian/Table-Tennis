@@ -1,6 +1,7 @@
 const router  = require('express').Router()
 const pool    = require('../db')
 const bcrypt  = require('bcryptjs')
+const crypto  = require('crypto')
 const multer  = require('multer')
 const { requireAuth, requireAdmin } = require('../middleware/auth')
 
@@ -356,6 +357,24 @@ router.get('/bookings', async (req, res) => {
     )
     res.json({ bookings: rows })
   } catch { res.status(500).json({ message: 'Server error.' }) }
+})
+
+// POST /api/admin/invites — generate a one-time coach invite link
+router.post('/invites', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const clubId = req.club?.id ?? req.user?.club_id ?? null
+    if (!clubId) return res.status(400).json({ message: 'No club found.' })
+    const token = crypto.randomBytes(32).toString('hex')
+    await pool.query(
+      `INSERT INTO coach_invites (token, club_id, created_by) VALUES ($1, $2, $3)`,
+      [token, clubId, req.user.id]
+    )
+    const url = `${process.env.FLINTHER_URL || 'https://flinther.com'}/register?invite=${token}`
+    res.json({ url })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: 'Server error.' })
+  }
 })
 
 module.exports = router

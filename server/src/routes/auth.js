@@ -35,19 +35,38 @@ const safeUser = (u) => ({
 
 // POST /api/auth/register
 router.post('/register', async (req, res) => {
-  const { name, password, phone } = req.body
+  const { name, password, phone, invite_token } = req.body
   const email = req.body.email?.toLowerCase().trim()
   if (!name || !email || !password)
     return res.status(400).json({ message: 'Name, email and password are required.' })
 
   const clubId = req.club?.id ?? null
-  const isPlatformOwner = clubId === null
 
   try {
     const hash = await bcrypt.hash(password, 12)
 
-    if (isPlatformOwner) {
-      // Platform signup — create unverified, send verification email
+    // Coach invite signup
+    if (invite_token) {
+      const { rows: inviteRows } = await pool.query(
+        `SELECT * FROM coach_invites WHERE token=$1 AND used_at IS NULL AND expires_at > NOW()`,
+        [invite_token]
+      )
+      if (!inviteRows[0]) return res.status(400).json({ message: 'Invalid or expired invite link.' })
+      const invite = inviteRows[0]
+      const { rows } = await pool.query(
+        `INSERT INTO users (name, email, password_hash, phone, club_id, role, platform_owner, email_verified)
+         VALUES ($1,$2,$3,$4,$5,'coach',FALSE,TRUE) RETURNING *`,
+        [name, email, hash, phone || null, invite.club_id]
+      )
+      await pool.query(
+        `UPDATE coach_invites SET used_at=NOW(), used_by=$1 WHERE id=$2`,
+        [rows[0].id, invite.id]
+      )
+      return res.status(201).json({ token: sign(rows[0]), user: safeUser(rows[0]) })
+    }
+
+    // Platform admin signup (no club yet)
+    if (clubId === null) {
       const verificationToken = crypto.randomBytes(32).toString('hex')
       const { rows } = await pool.query(
         'INSERT INTO users (name, email, password_hash, phone, club_id, platform_owner, email_verified, email_verification_token) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
@@ -58,13 +77,12 @@ router.post('/register', async (req, res) => {
       return res.status(201).json({ needsVerification: true })
     }
 
-    // Club member signup — no email verification needed
+    // Club member signup
     const { rows } = await pool.query(
       'INSERT INTO users (name, email, password_hash, phone, club_id, platform_owner, email_verified) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *',
       [name, email, hash, phone || null, clubId, false, true]
     )
-    const user = rows[0]
-    res.status(201).json({ token: sign(user), user: safeUser(user) })
+    res.status(201).json({ token: sign(rows[0]), user: safeUser(rows[0]) })
   } catch (err) {
     if (err.code === '23505')
       return res.status(409).json({ message: 'An account with that email already exists.' })
@@ -85,6 +103,25 @@ router.get('/verify-email', async (req, res) => {
     )
     if (!rows[0]) return res.status(400).json({ message: 'Invalid or expired verification link.' })
     res.json({ verified: true })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: 'Server error.' })
+  }
+})
+
+// GET /api/auth/invite-info?token=xxx — validate invite and return club name
+router.get('/invite-info', async (req, res) => {
+  const { token } = req.query
+  if (!token) return res.status(400).json({ message: 'Missing token.' })
+  try {
+    const { rows } = await pool.query(
+      `SELECT c.name AS club_name FROM coach_invites ci
+       JOIN clubs c ON c.id = ci.club_id
+       WHERE ci.token=$1 AND ci.used_at IS NULL AND ci.expires_at > NOW()`,
+      [token]
+    )
+    if (!rows[0]) return res.status(404).json({ message: 'Invalid or expired invite link.' })
+    res.json({ club_name: rows[0].club_name })
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: 'Server error.' })
