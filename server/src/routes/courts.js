@@ -1,8 +1,9 @@
 const router = require('express').Router()
 const pool   = require('../db')
+const { requireAuth } = require('../middleware/auth')
 
 // GET /api/courts
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
     const clubId = req.club?.id ?? req.user?.club_id ?? null
     const { rows } = await pool.query(

@@ -3,7 +3,7 @@ const pool   = require('../db')
 const { requireAuth, requireAdmin } = require('../middleware/auth')
 
 // GET /api/schedule  — returns active rows for members, all rows for admin
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, async (req, res) => {
   try {
     const clubId  = req.club?.id ?? req.user?.club_id ?? null
     // If ?all=1 and admin, return every row (including inactive)
