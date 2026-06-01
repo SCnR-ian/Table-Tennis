@@ -359,6 +359,129 @@ router.get('/bookings', async (req, res) => {
   } catch { res.status(500).json({ message: 'Server error.' }) }
 })
 
+// POST /api/admin/settings-conflicts
+// Body: { new_court_count?, schedule?: [{ day, is_active, start_time, end_time }] }
+router.post('/settings-conflicts', async (req, res) => {
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
+  const { new_court_count, schedule } = req.body
+  const today = new Date().toISOString().slice(0, 10)
+  const DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 0 }
+  const conflicts = []
+
+  try {
+    // ── 1. Court count reduction ──────────────────────────────────────────────
+    if (new_court_count !== undefined) {
+      const { rows: courts } = await pool.query(
+        'SELECT id, name FROM courts WHERE club_id=$1 AND is_active=TRUE ORDER BY id',
+        [clubId]
+      )
+      if (new_court_count < courts.length) {
+        const deactivated = courts.slice(new_court_count).map(r => r.id)
+        const { rows } = await pool.query(
+          `SELECT DISTINCT ON (b.booking_group_id)
+             b.date, MIN(b.start_time) AS start_time, MAX(b.end_time) AS end_time,
+             u.name AS user_name, c.name AS court_name
+           FROM bookings b
+           JOIN users u ON u.id = b.user_id
+           LEFT JOIN courts c ON c.id = b.court_id
+           WHERE b.club_id=$1 AND b.status='confirmed' AND b.date >= $2
+             AND b.court_id = ANY($3)
+           GROUP BY b.booking_group_id, b.date, u.name, c.name
+           ORDER BY b.booking_group_id, b.date`,
+          [clubId, today, deactivated]
+        )
+        for (const r of rows) {
+          conflicts.push({ type: 'booking', date: r.date, start_time: r.start_time, end_time: r.end_time, description: `${r.user_name} — ${r.court_name}`, reason: 'court_removed' })
+        }
+      }
+    }
+
+    // ── 2. Schedule changes ───────────────────────────────────────────────────
+    if (Array.isArray(schedule)) {
+      for (const day of schedule) {
+        const dow = DOW[day.day]
+        if (dow === undefined) continue
+
+        if (!day.is_active) {
+          const { rows: bRows } = await pool.query(
+            `SELECT DISTINCT ON (b.booking_group_id)
+               b.date, MIN(b.start_time) AS start_time, MAX(b.end_time) AS end_time, u.name AS user_name
+             FROM bookings b JOIN users u ON u.id = b.user_id
+             WHERE b.club_id=$1 AND b.status='confirmed' AND b.date >= $2
+               AND EXTRACT(DOW FROM b.date) = $3
+             GROUP BY b.booking_group_id, b.date, u.name
+             ORDER BY b.booking_group_id, b.date`,
+            [clubId, today, dow]
+          )
+          for (const r of bRows) conflicts.push({ type: 'booking', date: r.date, start_time: r.start_time, end_time: r.end_time, description: r.user_name, reason: 'day_closed' })
+
+          const { rows: cRows } = await pool.query(
+            `SELECT cs.date, cs.start_time, cs.end_time, u.name AS student_name, co.name AS coach_name
+             FROM coaching_sessions cs
+             JOIN users u ON u.id = cs.student_id
+             JOIN coaches co ON co.id = cs.coach_id
+             WHERE cs.club_id=$1 AND cs.status='confirmed' AND cs.date >= $2
+               AND EXTRACT(DOW FROM cs.date) = $3
+             ORDER BY cs.date`,
+            [clubId, today, dow]
+          )
+          for (const r of cRows) conflicts.push({ type: 'coaching', date: r.date, start_time: r.start_time, end_time: r.end_time, description: `${r.student_name} × ${r.coach_name}`, reason: 'day_closed' })
+
+          const { rows: sRows } = await pool.query(
+            `SELECT date, start_time, end_time, title FROM social_play_sessions
+             WHERE club_id=$1 AND status='open' AND date >= $2
+               AND EXTRACT(DOW FROM date) = $3 ORDER BY date`,
+            [clubId, today, dow]
+          )
+          for (const r of sRows) conflicts.push({ type: 'social', date: r.date, start_time: r.start_time, end_time: r.end_time, description: r.title, reason: 'day_closed' })
+
+        } else {
+          const { rows: bRows } = await pool.query(
+            `SELECT DISTINCT ON (b.booking_group_id)
+               b.date, MIN(b.start_time) AS start_time, MAX(b.end_time) AS end_time, u.name AS user_name
+             FROM bookings b JOIN users u ON u.id = b.user_id
+             WHERE b.club_id=$1 AND b.status='confirmed' AND b.date >= $2
+               AND EXTRACT(DOW FROM b.date) = $3
+             GROUP BY b.booking_group_id, b.date, u.name
+             HAVING MIN(b.start_time) < $4::time OR MAX(b.end_time) > $5::time
+             ORDER BY b.booking_group_id, b.date`,
+            [clubId, today, dow, day.start_time, day.end_time]
+          )
+          for (const r of bRows) conflicts.push({ type: 'booking', date: r.date, start_time: r.start_time, end_time: r.end_time, description: r.user_name, reason: 'outside_hours' })
+
+          const { rows: cRows } = await pool.query(
+            `SELECT cs.date, cs.start_time, cs.end_time, u.name AS student_name, co.name AS coach_name
+             FROM coaching_sessions cs
+             JOIN users u ON u.id = cs.student_id
+             JOIN coaches co ON co.id = cs.coach_id
+             WHERE cs.club_id=$1 AND cs.status='confirmed' AND cs.date >= $2
+               AND EXTRACT(DOW FROM cs.date) = $3
+               AND (cs.start_time < $4::time OR cs.end_time > $5::time)
+             ORDER BY cs.date`,
+            [clubId, today, dow, day.start_time, day.end_time]
+          )
+          for (const r of cRows) conflicts.push({ type: 'coaching', date: r.date, start_time: r.start_time, end_time: r.end_time, description: `${r.student_name} × ${r.coach_name}`, reason: 'outside_hours' })
+
+          const { rows: sRows } = await pool.query(
+            `SELECT date, start_time, end_time, title FROM social_play_sessions
+             WHERE club_id=$1 AND status='open' AND date >= $2
+               AND EXTRACT(DOW FROM date) = $3
+               AND (start_time < $4::time OR end_time > $5::time)
+             ORDER BY date`,
+            [clubId, today, dow, day.start_time, day.end_time]
+          )
+          for (const r of sRows) conflicts.push({ type: 'social', date: r.date, start_time: r.start_time, end_time: r.end_time, description: r.title, reason: 'outside_hours' })
+        }
+      }
+    }
+
+    res.json({ conflicts })
+  } catch (err) {
+    console.error('settings-conflicts error:', err)
+    res.status(500).json({ message: 'Server error.' })
+  }
+})
+
 // POST /api/admin/invites — generate a one-time coach invite link
 router.post('/invites', requireAuth, requireAdmin, async (req, res) => {
   try {
