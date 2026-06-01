@@ -40,13 +40,13 @@ router.get('/stats', async (req, res) => {
 
 // POST /api/admin/members — admin creates a member account
 router.post('/members', async (req, res) => {
-  const { name, email, password, phone } = req.body
-  if (!name?.trim() || !email?.trim() || !password)
-    return res.status(400).json({ message: 'Name, email and password are required.' })
+  const { name, email, phone } = req.body
+  if (!name?.trim() || !email?.trim())
+    return res.status(400).json({ message: 'Name and email are required.' })
   try {
     const clubId = req.club?.id ?? req.user?.club_id ?? null
-
-    const hash = await bcrypt.hash(password, 12)
+    const tempPassword = crypto.randomBytes(12).toString('hex')
+    const hash = await bcrypt.hash(tempPassword, 12)
     const { rows } = await pool.query(
       'INSERT INTO users (name, email, password_hash, phone, club_id) VALUES ($1,$2,$3,$4,$5) RETURNING *',
       [name.trim(), email.toLowerCase().trim(), hash, phone?.trim() || null, clubId]
