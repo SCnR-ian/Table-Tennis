@@ -213,7 +213,10 @@ router.patch('/members/:id/status', async (req, res) => {
     )
     if (!rows[0]) return res.status(404).json({ message: 'Member not found.' })
     res.json({ member: safeUser(rows[0]) })
-  } catch (err) { res.status(500).json({ message: 'Server error.' }) }
+  } catch (err) {
+    console.error('deactivate member error:', err.message)
+    res.status(500).json({ message: err.message })
+  }
 })
 
 // DELETE /api/admin/members/:id
