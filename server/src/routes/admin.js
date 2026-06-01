@@ -47,7 +47,9 @@ router.post('/members', async (req, res) => {
     const clubId = req.club?.id ?? req.user?.club_id ?? null
     const tempPassword = crypto.randomBytes(12).toString('hex')
     const hash = await bcrypt.hash(tempPassword, 12)
-    const emailVal = email?.trim() ? email.toLowerCase().trim() : null
+    const emailVal = email?.trim()
+      ? email.toLowerCase().trim()
+      : `member_${crypto.randomBytes(8).toString('hex')}@noemail.local`
     const { rows } = await pool.query(
       'INSERT INTO users (name, email, password_hash, phone, club_id) VALUES ($1,$2,$3,$4,$5) RETURNING *',
       [name.trim(), emailVal, hash, phone?.trim() || null, clubId]
