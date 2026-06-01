@@ -86,6 +86,45 @@ function fmtTime(t) {
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
 }
 
+// GET /api/coaching/public/:coachId — no auth, returns coach info + upcoming sessions
+router.get('/public/:coachId', async (req, res) => {
+  const clubId = req.club?.id ?? req.user?.club_id ?? 1
+  const today  = new Date().toISOString().slice(0, 10)
+  try {
+    const { rows: coachRows } = await pool.query(
+      'SELECT id, name FROM coaches WHERE id=$1 AND club_id=$2 AND is_active=TRUE',
+      [req.params.coachId, clubId]
+    )
+    if (!coachRows[0]) return res.status(404).json({ message: 'Coach not found.' })
+
+    const { rows: sessions } = await pool.query(
+      `SELECT cs.date, cs.start_time, cs.end_time, cs.group_id,
+              u.name AS student_name
+       FROM coaching_sessions cs
+       JOIN users u ON u.id = cs.student_id
+       WHERE cs.coach_id = $1 AND cs.club_id = $2
+         AND cs.status = 'confirmed' AND cs.date >= $3
+       ORDER BY cs.date, cs.start_time`,
+      [req.params.coachId, clubId, today]
+    )
+
+    const { rows: bookings } = await pool.query(
+      `SELECT DISTINCT b.date,
+              MIN(b.start_time) AS start_time, MAX(b.end_time) AS end_time
+       FROM bookings b
+       WHERE b.club_id=$1 AND b.status='confirmed' AND b.date >= $2
+       GROUP BY b.booking_group_id, b.date
+       ORDER BY b.date`,
+      [clubId, today]
+    )
+
+    res.json({ coach: coachRows[0], sessions, bookings })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: 'Server error.' })
+  }
+})
+
 // ─── COACH CRUD (admin only) ──────────────────────────────────────────────────
 
 // GET /api/coaching/coaches/public — no auth, returns name + avg rating per coach
