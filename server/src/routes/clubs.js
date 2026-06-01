@@ -107,7 +107,7 @@ router.post('/register', requireAuth, upload.single('logo'), async (req, res) =>
 
     // 2. Courts
     for (let i = 1; i <= numCourts; i++) {
-      await client.query(`INSERT INTO courts (name, club_id) VALUES ($1, $2)`, [`Court ${i}`, clubId])
+      await client.query(`INSERT INTO courts (name, club_id, is_active) VALUES ($1, $2, TRUE)`, [`Court ${i}`, clubId])
     }
 
     // 3. Schedule — per-day hours
