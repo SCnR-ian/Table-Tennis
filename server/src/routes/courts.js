@@ -36,18 +36,30 @@ router.put('/count', requireAuth, requireAdmin, async (req, res) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    const { rows: current } = await client.query(
-      'SELECT id FROM courts WHERE club_id=$1 ORDER BY id', [clubId]
+    const { rows: all } = await client.query(
+      'SELECT id, is_active FROM courts WHERE club_id=$1 ORDER BY id', [clubId]
     )
-    if (n > current.length) {
-      for (let i = current.length + 1; i <= n; i++) {
+    const active   = all.filter(c => c.is_active)
+    const inactive = all.filter(c => !c.is_active)
+
+    if (n > active.length) {
+      // Re-activate previously deactivated courts first, then insert new ones
+      const toReactivate = inactive.slice(0, n - active.length)
+      if (toReactivate.length > 0) {
         await client.query(
-          'INSERT INTO courts (name, club_id, is_active) VALUES ($1,$2,TRUE)',
-          [`Court ${i}`, clubId]
+          'UPDATE courts SET is_active=TRUE WHERE id=ANY($1)',
+          [toReactivate.map(r => r.id)]
         )
       }
-    } else if (n < current.length) {
-      const toDeactivate = current.slice(n).map(r => r.id)
+      const stillNeeded = n - active.length - toReactivate.length
+      for (let i = 0; i < stillNeeded; i++) {
+        await client.query(
+          'INSERT INTO courts (name, club_id, is_active) VALUES ($1,$2,TRUE)',
+          [`Court ${all.length + i + 1}`, clubId]
+        )
+      }
+    } else if (n < active.length) {
+      const toDeactivate = active.slice(n).map(r => r.id)
       await client.query(
         'UPDATE courts SET is_active=FALSE WHERE id=ANY($1)', [toDeactivate]
       )
