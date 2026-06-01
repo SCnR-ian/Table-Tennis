@@ -378,8 +378,8 @@ router.post('/settings-conflicts', async (req, res) => {
       if (new_court_count < courts.length) {
         const deactivated = courts.slice(new_court_count).map(r => r.id)
         const { rows } = await pool.query(
-          `SELECT DISTINCT ON (b.booking_group_id)
-             b.date, MIN(b.start_time) AS start_time, MAX(b.end_time) AS end_time,
+          `SELECT b.booking_group_id, b.date,
+             MIN(b.start_time) AS start_time, MAX(b.end_time) AS end_time,
              u.name AS user_name, c.name AS court_name
            FROM bookings b
            JOIN users u ON u.id = b.user_id
@@ -387,7 +387,7 @@ router.post('/settings-conflicts', async (req, res) => {
            WHERE b.club_id=$1 AND b.status='confirmed' AND b.date >= $2
              AND b.court_id = ANY($3)
            GROUP BY b.booking_group_id, b.date, u.name, c.name
-           ORDER BY b.booking_group_id, b.date`,
+           ORDER BY b.date`,
           [clubId, today, deactivated]
         )
         for (const r of rows) {
@@ -404,13 +404,13 @@ router.post('/settings-conflicts', async (req, res) => {
 
         if (!day.is_active) {
           const { rows: bRows } = await pool.query(
-            `SELECT DISTINCT ON (b.booking_group_id)
-               b.date, MIN(b.start_time) AS start_time, MAX(b.end_time) AS end_time, u.name AS user_name
+            `SELECT b.booking_group_id, b.date,
+               MIN(b.start_time) AS start_time, MAX(b.end_time) AS end_time, u.name AS user_name
              FROM bookings b JOIN users u ON u.id = b.user_id
              WHERE b.club_id=$1 AND b.status='confirmed' AND b.date >= $2
                AND EXTRACT(DOW FROM b.date) = $3
              GROUP BY b.booking_group_id, b.date, u.name
-             ORDER BY b.booking_group_id, b.date`,
+             ORDER BY b.date`,
             [clubId, today, dow]
           )
           for (const r of bRows) conflicts.push({ type: 'booking', date: r.date, start_time: r.start_time, end_time: r.end_time, description: r.user_name, reason: 'day_closed' })
@@ -437,14 +437,14 @@ router.post('/settings-conflicts', async (req, res) => {
 
         } else {
           const { rows: bRows } = await pool.query(
-            `SELECT DISTINCT ON (b.booking_group_id)
-               b.date, MIN(b.start_time) AS start_time, MAX(b.end_time) AS end_time, u.name AS user_name
+            `SELECT b.booking_group_id, b.date,
+               MIN(b.start_time) AS start_time, MAX(b.end_time) AS end_time, u.name AS user_name
              FROM bookings b JOIN users u ON u.id = b.user_id
              WHERE b.club_id=$1 AND b.status='confirmed' AND b.date >= $2
                AND EXTRACT(DOW FROM b.date) = $3
              GROUP BY b.booking_group_id, b.date, u.name
              HAVING MIN(b.start_time) < $4::time OR MAX(b.end_time) > $5::time
-             ORDER BY b.booking_group_id, b.date`,
+             ORDER BY b.date`,
             [clubId, today, dow, day.start_time, day.end_time]
           )
           for (const r of bRows) conflicts.push({ type: 'booking', date: r.date, start_time: r.start_time, end_time: r.end_time, description: r.user_name, reason: 'outside_hours' })
