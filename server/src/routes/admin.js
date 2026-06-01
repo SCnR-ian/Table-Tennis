@@ -19,6 +19,7 @@ router.use(requireAuth, requireAdmin)
 const safeUser = (u) => ({
   id: u.id, name: u.name, email: u.email,
   role: u.role, phone: u.phone, avatar_url: u.avatar_url, created_at: u.created_at,
+  is_active: u.is_active ?? true,
 })
 
 // GET /api/admin/stats
