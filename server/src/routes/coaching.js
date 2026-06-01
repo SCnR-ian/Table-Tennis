@@ -86,6 +86,30 @@ function fmtTime(t) {
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
 }
 
+// GET /api/coaching/daily?date=YYYY-MM-DD — no auth, returns all sessions for a date
+router.get('/daily', async (req, res) => {
+  const clubId = req.club?.id ?? req.user?.club_id ?? 1
+  const date   = req.query.date || new Date().toISOString().slice(0, 10)
+  try {
+    const { rows } = await pool.query(
+      `SELECT cs.id, cs.date, cs.start_time, cs.end_time, cs.group_id,
+              u.name  AS student_name,
+              co.name AS coach_name,
+              co.id   AS coach_id
+       FROM coaching_sessions cs
+       JOIN users  u  ON u.id  = cs.student_id
+       JOIN coaches co ON co.id = cs.coach_id
+       WHERE cs.club_id=$1 AND cs.status='confirmed' AND cs.date=$2
+       ORDER BY cs.start_time, co.name, u.name`,
+      [clubId, date]
+    )
+    res.json({ date, sessions: rows })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: 'Server error.' })
+  }
+})
+
 // GET /api/coaching/public/:coachId — no auth, returns coach info + upcoming sessions
 router.get('/public/:coachId', async (req, res) => {
   const clubId = req.club?.id ?? req.user?.club_id ?? 1
