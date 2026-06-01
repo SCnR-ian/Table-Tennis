@@ -60,6 +60,12 @@ router.post('/register', async (req, res) => {
         [name, email, hash, phone || null, invite.club_id]
       )
       await pool.query(
+        `INSERT INTO coaches (name, user_id, club_id, is_active)
+         SELECT $1,$2,$3,TRUE
+         WHERE NOT EXISTS (SELECT 1 FROM coaches WHERE user_id=$2 AND club_id=$3)`,
+        [name, rows[0].id, invite.club_id]
+      )
+      await pool.query(
         `UPDATE coach_invites SET used_at=NOW(), used_by=$1 WHERE id=$2`,
         [rows[0].id, invite.id]
       )
