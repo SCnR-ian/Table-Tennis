@@ -86,6 +86,33 @@ function fmtTime(t) {
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`
 }
 
+// GET /api/coaching/coach-summary?from=YYYY-MM-DD&to=YYYY-MM-DD — admin, sessions per coach
+router.get('/coach-summary', requireAuth, requireAdmin, async (req, res) => {
+  const clubId = req.club?.id ?? req.user?.club_id ?? null
+  const { from, to } = req.query
+  if (!from || !to) return res.status(400).json({ message: 'from and to are required.' })
+  try {
+    const { rows } = await pool.query(
+      `SELECT
+         co.name AS coach_name,
+         COUNT(CASE WHEN cs.group_id IS NULL THEN 1 END)::int AS solo,
+         COUNT(DISTINCT cs.group_id) FILTER (WHERE cs.group_id IS NOT NULL)::int AS grp,
+         COUNT(DISTINCT COALESCE(cs.group_id::text, cs.id::text))::int AS total
+       FROM coaching_sessions cs
+       JOIN coaches co ON co.id = cs.coach_id
+       WHERE cs.club_id = $1 AND cs.status = 'confirmed'
+         AND cs.date >= $2 AND cs.date <= $3
+       GROUP BY co.id, co.name
+       ORDER BY total DESC, co.name`,
+      [clubId, from, to]
+    )
+    res.json({ coaches: rows, from, to })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: 'Server error.' })
+  }
+})
+
 // GET /api/coaching/daily?date=YYYY-MM-DD — no auth, returns all sessions for a date
 router.get('/daily', async (req, res) => {
   const clubId = req.club?.id ?? req.user?.club_id ?? 1
