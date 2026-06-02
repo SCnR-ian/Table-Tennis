@@ -431,7 +431,7 @@ router.post('/sessions', requireAuth, requireAdmin, async (req, res) => {
          free_courts AS (
            SELECT c.id
            FROM courts c
-           WHERE c.club_id = $5
+           WHERE c.club_id = $5 AND c.is_active = TRUE
            AND c.id NOT IN (
              SELECT cs2.court_id FROM coaching_sessions cs2
              WHERE cs2.date = $1 AND cs2.status = 'confirmed' AND cs2.club_id = $5
@@ -731,7 +731,7 @@ router.post('/sessions/group', requireAuth, requireAdmin, async (req, res) => {
            SELECT c.id,
                   ROW_NUMBER() OVER (ORDER BY c.id) AS rn
            FROM courts c
-           WHERE c.club_id = $4
+           WHERE c.club_id = $4 AND c.is_active = TRUE
            AND c.id NOT IN (
              SELECT DISTINCT cs2.court_id FROM coaching_sessions cs2
              WHERE cs2.date = $1 AND cs2.status = 'confirmed' AND cs2.club_id = $4
@@ -1508,7 +1508,7 @@ router.put('/sessions/group/:groupId/reschedule', requireAuth, requireAdmin, asy
        free_courts AS (
          SELECT c.id, ROW_NUMBER() OVER (ORDER BY c.id) AS rn
          FROM courts c
-         WHERE c.club_id=$5
+         WHERE c.club_id=$5 AND c.is_active = TRUE
          AND c.id NOT IN (
            SELECT DISTINCT cs2.court_id FROM coaching_sessions cs2
            WHERE cs2.date=$1 AND cs2.status='confirmed' AND cs2.club_id=$5 AND NOT (cs2.id = ANY($4::int[]))
