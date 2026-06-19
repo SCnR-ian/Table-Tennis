@@ -12,20 +12,27 @@ const api = axios.create({
 });
 
 // Detect which club subdomain this frontend belongs to and attach it on every request.
-// Priority: real subdomain from hostname > VITE_CLUB_SUBDOMAIN env var.
+// Priority: VITE_CLUB_SUBDOMAIN env var > custom-domain map > subdomain from hostname.
+// Custom domains (e.g. eppingtabletennis.com.au) don't contain the club subdomain in
+// their hostname, so they're resolved via CUSTOM_DOMAINS. Platform subdomains
+// (e.g. epping.flinther.com) fall back to deriving the club from the hostname.
 // Platform/deploy domains (vercel.app, etc.) are excluded so staging builds still work.
 ;(function setClubHeader() {
   const PLATFORM = ['vercel.app','netlify.app','onrender.com','railway.app','fly.dev','github.io','pages.dev']
+  // Map a club's custom apex domain → its club subdomain in the DB.
+  const CUSTOM_DOMAINS = {
+    'eppingtabletennis.com.au': 'epping',
+    'www.eppingtabletennis.com.au': 'epping',
+  }
   const hostname = typeof window !== 'undefined' ? window.location.hostname : ''
-  let subdomain = null
-  if (hostname && hostname !== 'localhost' && !hostname.match(/^\d/)) {
+  let subdomain = import.meta.env.VITE_CLUB_SUBDOMAIN || CUSTOM_DOMAINS[hostname] || null
+  if (!subdomain && hostname && hostname !== 'localhost' && !hostname.match(/^\d/)) {
     const isPlatform = PLATFORM.some(d => hostname.endsWith('.' + d) || hostname === d)
     if (!isPlatform) {
       const parts = hostname.split('.')
       if (parts.length >= 3) subdomain = parts[0]
     }
   }
-  subdomain = subdomain || import.meta.env.VITE_CLUB_SUBDOMAIN || null
   api.defaults.headers.common['X-Club-Subdomain'] = subdomain || '_platform'
 })()
 
