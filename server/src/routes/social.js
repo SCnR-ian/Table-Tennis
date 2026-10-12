@@ -259,7 +259,7 @@ router.post('/', requireAuth, async (req, res) => {
     res.status(201).json({ sessions })
   } catch (err) {
     await client.query('ROLLBACK')
-    res.status(500).json({ message: err.message ?? 'Server error.' })
+    (console.error('[social]', err.message), res.status(500).json({ message: 'Server error.' }))
   } finally {
     client.release()
   }
@@ -327,7 +327,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     )
     if (!rows[0]) return res.status(404).json({ message: 'Session not found.' })
     res.json({ session: rows[0] })
-  } catch (err) { res.status(500).json({ message: err.message ?? 'Server error.' }) }
+  } catch (err) { (console.error('[social]', err.message), res.status(500).json({ message: 'Server error.' })) }
 })
 
 // PATCH /api/social/recurrence/:recurrenceId  — bulk-edit all future sessions in a series
@@ -356,7 +356,7 @@ router.patch('/recurrence/:recurrenceId', requireAuth, requireAdmin, async (req,
       values
     )
     res.json({ message: `Updated ${rowCount} session(s).`, count: rowCount })
-  } catch (err) { res.status(500).json({ message: err.message ?? 'Server error.' }) }
+  } catch (err) { (console.error('[social]', err.message), res.status(500).json({ message: 'Server error.' })) }
 })
 
 // DELETE /api/social/recurrence/:recurrenceId

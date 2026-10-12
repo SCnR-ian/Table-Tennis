@@ -2,10 +2,14 @@ const router = require('express').Router()
 const pool   = require('../db')
 const { requireAuth } = require('../middleware/auth')
 
-const safeUser = (u) => ({
-  id: u.id, name: u.name, email: u.email,
-  role: u.role, phone: u.phone, avatar_url: u.avatar_url, created_at: u.created_at,
+// Public-safe view (no PII). Email and phone are only exposed to admins or to
+// the member themselves; otherwise any logged-in user could collect every
+// member's contact details by walking the /:id route.
+const publicUser = (u) => ({
+  id: u.id, name: u.name, role: u.role,
+  avatar_url: u.avatar_url, created_at: u.created_at,
 })
+const fullUser = (u) => ({ ...publicUser(u), email: u.email, phone: u.phone })
 
 // GET /api/members/:id
 router.get('/:id', requireAuth, async (req, res) => {
@@ -16,7 +20,8 @@ router.get('/:id', requireAuth, async (req, res) => {
       [req.params.id, clubId]
     )
     if (!rows[0]) return res.status(404).json({ message: 'Member not found.' })
-    res.json({ member: safeUser(rows[0]) })
+    const canSeePII = req.user.role === 'admin' || String(req.user.id) === String(rows[0].id)
+    res.json({ member: (canSeePII ? fullUser : publicUser)(rows[0]) })
   } catch { res.status(500).json({ message: 'Server error.' }) }
 })
 

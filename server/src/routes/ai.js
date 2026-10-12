@@ -1894,7 +1894,7 @@ Always respond in the same language the admin uses (English or Traditional Chine
     console.error('[ai/chat]', err.status ?? '', err.message)
     if (err.status === 429)
       return res.status(429).json({ message: 'Too many requests — please wait a moment and try again.' })
-    res.status(500).json({ message: 'AI error: ' + err.message })
+    res.status(500).json({ message: 'The AI assistant hit an error. Please try again.' })
   }
 })
 

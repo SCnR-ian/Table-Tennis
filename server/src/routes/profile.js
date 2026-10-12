@@ -74,6 +74,8 @@ router.post('/password', requireAuth, async (req, res) => {
   const { currentPassword, newPassword } = req.body
   if (!currentPassword || !newPassword)
     return res.status(400).json({ message: 'Both passwords are required.' })
+  if (newPassword.length < 8)
+    return res.status(400).json({ message: 'New password must be at least 8 characters.' })
 
   try {
     const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [req.user.id])

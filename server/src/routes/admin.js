@@ -125,7 +125,7 @@ router.put('/members/:id/role', async (req, res) => {
       try { await client.query('DELETE FROM coaches WHERE user_id=$1', [req.params.id]) } catch {}
     }
     res.json({ member: safeUser(rows[0]) })
-  } catch (err) { res.status(500).json({ message: err.message ?? 'Server error.' }) }
+  } catch (err) { (console.error('[admin]', err.message), res.status(500).json({ message: 'Server error.' })) }
   finally { client.release() }
 })
 
@@ -163,7 +163,7 @@ router.post('/members/:id/make-coach', upload.single('resume'), async (req, res)
   } catch (err) {
     await client.query('ROLLBACK')
     console.error('make-coach error:', err.message, err.stack)
-    res.status(500).json({ message: err.message })
+    res.status(500).json({ message: 'Server error.' })
   } finally { client.release() }
 })
 
@@ -216,7 +216,7 @@ router.patch('/members/:id/status', async (req, res) => {
     res.json({ member: safeUser(rows[0]) })
   } catch (err) {
     console.error('deactivate member error:', err.message)
-    res.status(500).json({ message: err.message })
+    res.status(500).json({ message: 'Server error.' })
   }
 })
 

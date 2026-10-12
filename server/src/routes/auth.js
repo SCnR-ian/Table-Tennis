@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit')
 const passport  = require('../config/passport')
 const pool      = require('../db')
 const { Resend } = require('resend')
+const { authLimiter } = require('../middleware/rateLimit')
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -35,11 +36,13 @@ const safeUser = (u) => ({
 })
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   const { name, password, phone, invite_token } = req.body
   const email = req.body.email?.toLowerCase().trim()
   if (!name || !email || !password)
     return res.status(400).json({ message: 'Name, email and password are required.' })
+  if (password.length < 8)
+    return res.status(400).json({ message: 'Password must be at least 8 characters.' })
 
   const clubId = req.club?.id ?? null
 
@@ -224,7 +227,7 @@ router.get('/me', require('../middleware/auth').requireAuth, async (req, res) =>
 })
 
 // ── Forgot Password ───────────────────────────────────────────────────────────
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', authLimiter, async (req, res) => {
   const { email } = req.body
   if (!email) return res.status(400).json({ message: 'Email is required.' })
   if (!req.club) return res.status(400).json({ message: 'Club not found.' })
@@ -272,7 +275,7 @@ router.post('/forgot-password', async (req, res) => {
 })
 
 // ── Reset Password ────────────────────────────────────────────────────────────
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', authLimiter, async (req, res) => {
   const { token, password } = req.body
   if (!token || !password) return res.status(400).json({ message: 'Token and new password are required.' })
   if (password.length < 8) return res.status(400).json({ message: 'Password must be at least 8 characters.' })

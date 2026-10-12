@@ -223,7 +223,13 @@ router.delete('/products/:id/images/:imageId', requireAuth, async (req, res) => 
 
 // Serve product images (legacy single image_url too)
 router.get('/images/:filename', (req, res) => {
-  res.sendFile(path.join(UPLOAD_DIR, req.params.filename))
+  // Reject any path-traversal attempt; only serve plain filenames from UPLOAD_DIR.
+  const name = path.basename(req.params.filename)
+  if (name !== req.params.filename)
+    return res.status(400).json({ message: 'Invalid filename.' })
+  res.sendFile(name, { root: UPLOAD_DIR }, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ message: 'Not found.' })
+  })
 })
 
 // ── Orders ────────────────────────────────────────────────────────────────────

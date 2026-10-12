@@ -1,30 +1,59 @@
 require('dotenv').config()
 const express        = require('express')
 const cors           = require('cors')
+const helmet         = require('helmet')
 const path           = require('path')
 const session        = require('express-session')
 const passport       = require('./config/passport')
 const cron           = require('node-cron')
 
 const rateLimit = require('express-rate-limit')
+const { apiLimiter } = require('./middleware/rateLimit')
+
+// ── Required secrets ──────────────────────────────────────────────────────────
+// Fail fast in production rather than silently falling back to a guessable
+// default secret (which would let anyone forge sessions or tokens).
+if (process.env.NODE_ENV === 'production') {
+  for (const key of ['JWT_SECRET', 'SESSION_SECRET']) {
+    if (!process.env[key]) {
+      console.error(`FATAL: ${key} must be set in production.`)
+      process.exit(1)
+    }
+  }
+}
 
 const app  = express()
 const PORT = process.env.PORT || 8000
 
 // ── Middleware ────────────────────────────────────────────────────────────────
-app.set('trust proxy', 1)   // required on Render (runs behind a reverse proxy)
+app.set('trust proxy', 1)   // runs behind a reverse proxy
+// Secure response headers. Images are served from this API to the Epping site
+// (a different origin), so cross-origin resource loading must stay allowed.
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
+
+// Production origins: the Epping site, plus anything listed in FRONTEND_URL or
+// CORS_ORIGINS (comma-separated), e.g. a Cloudflare Pages preview URL.
 const ALLOWED_ORIGINS = [
-  'http://localhost:5173',
-  'http://localhost:5174',
+  'https://eppingtabletennis.com.au',
+  'https://www.eppingtabletennis.com.au',
   process.env.FRONTEND_URL,
+  ...(process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()),
 ].filter(Boolean)
 
+const isDev = process.env.NODE_ENV !== 'production'
 app.use(cors({
   origin: (origin, cb) => {
     // Allow requests with no origin (mobile apps, curl, server-to-server)
     if (!origin) return cb(null, true)
-    if (ALLOWED_ORIGINS.some(o => origin === o) || origin.endsWith('.vercel.app') || origin.endsWith('.flinther.com') || origin === 'https://flinther.com' || origin === 'http://flinther.com' || origin === 'https://eppingtabletennis.com.au' || origin === 'http://eppingtabletennis.com.au' || origin.endsWith('.eppingtabletennis.com.au') || origin.endsWith('.pages.dev') || origin.endsWith('.devtunnels.ms') || /^http:\/\/[a-z0-9-]+\.localhost(:\d+)?$/.test(origin) || /^http:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin))
-      return cb(null, true)
+    const prodAllowed = ALLOWED_ORIGINS.includes(origin)
+    // Dev-only conveniences (localhost, LAN IPs, tunnels): never in production,
+    // since with credentials:true they widen the attack surface needlessly.
+    const devAllowed = isDev && (
+      origin.endsWith('.devtunnels.ms') ||
+      /^http:\/\/[a-z0-9-]+\.localhost(:\d+)?$/.test(origin) ||
+      /^http:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin)
+    )
+    if (prodAllowed || devAllowed) return cb(null, true)
     cb(new Error(`CORS: origin ${origin} not allowed`))
   },
   credentials: true,
@@ -32,10 +61,11 @@ app.use(cors({
 // Raw body needed for Stripe webhook signature verification (must come before express.json)
 app.use('/api/billing/webhook', express.raw({ type: 'application/json' }))
 app.use(express.json({ limit: '15mb' }))
+app.use('/api', apiLimiter)   // general safety-net rate limit
 
 // Session is only needed during the brief OAuth redirect flow
 app.use(session({
-  secret:            process.env.SESSION_SECRET || 'dev_secret',
+  secret:            process.env.SESSION_SECRET || 'dev_secret_change_me',
   resave:            false,
   saveUninitialized: false,
   cookie: { secure: process.env.NODE_ENV === 'production', maxAge: 5 * 60 * 1000 },
@@ -51,13 +81,6 @@ const { tenantMiddleware } = require('./middleware/tenant')
 app.use(tenantMiddleware)
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many attempts. Please try again in 15 minutes.' },
-})
 const feedbackLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10,

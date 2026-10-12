@@ -398,11 +398,15 @@ router.post("/capture/:intentId", requireAuth, async (req, res) => {
     return res.status(403).json({ message: "Admins only." });
   try {
     const stripe = getStripe();
+    // Verify the intent belongs to this club before acting on it.
+    const existing = await stripe.paymentIntents.retrieve(req.params.intentId);
+    if (String(existing.metadata?.club_id) !== String(req.club?.id))
+      return res.status(403).json({ message: "This payment does not belong to this club." });
     const intent = await stripe.paymentIntents.capture(req.params.intentId);
     res.json({ status: intent.status, amount: intent.amount });
   } catch (err) {
     console.error("[payments] capture error:", err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to capture payment." });
   }
 });
 
@@ -413,11 +417,15 @@ router.post("/void/:intentId", requireAuth, async (req, res) => {
     return res.status(403).json({ message: "Admins only." });
   try {
     const stripe = getStripe();
+    // Verify the intent belongs to this club before acting on it.
+    const existing = await stripe.paymentIntents.retrieve(req.params.intentId);
+    if (String(existing.metadata?.club_id) !== String(req.club?.id))
+      return res.status(403).json({ message: "This payment does not belong to this club." });
     await stripe.paymentIntents.cancel(req.params.intentId);
     res.json({ message: "Authorization released." });
   } catch (err) {
     console.error("[payments] void error:", err.message);
-    res.status(500).json({ message: err.message });
+    res.status(500).json({ message: "Failed to release authorization." });
   }
 });
 

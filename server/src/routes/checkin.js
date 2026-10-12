@@ -306,7 +306,7 @@ router.get('/today-summary', requireAuth, async (req, res) => {
     res.json({ bookings, coaching, social })
   } catch (err) {
     console.error('today-summary error:', err)
-    res.status(500).json({ message: err.message ?? 'Server error.' })
+    (console.error('[checkin]', err.message), res.status(500).json({ message: 'Server error.' }))
   }
 })
 
