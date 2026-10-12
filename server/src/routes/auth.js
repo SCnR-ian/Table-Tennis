@@ -17,7 +17,7 @@ const loginLimiter = rateLimit({
 })
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@flinther.com'
+const EMAIL_FROM = process.env.EMAIL_FROM || 'noreply@eppingtabletennis.com.au'
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173'
 
 const sign = (user) =>
@@ -31,61 +31,22 @@ const safeUser = (u) => ({
   id: u.id, name: u.name, email: u.email,
   role: u.role, phone: u.phone, avatar_url: u.avatar_url,
   club_id: u.club_id,
-  platform_owner: u.platform_owner ?? false,
   name_changed_at: u.name_changed_at ?? null,
 })
 
 // POST /api/auth/register
 router.post('/register', authLimiter, async (req, res) => {
-  const { name, password, phone, invite_token } = req.body
+  const { name, password, phone } = req.body
   const email = req.body.email?.toLowerCase().trim()
   if (!name || !email || !password)
     return res.status(400).json({ message: 'Name, email and password are required.' })
   if (password.length < 8)
     return res.status(400).json({ message: 'Password must be at least 8 characters.' })
 
-  const clubId = req.club?.id ?? null
+  const clubId = req.club.id
 
   try {
     const hash = await bcrypt.hash(password, 12)
-
-    // Coach invite signup
-    if (invite_token) {
-      const { rows: inviteRows } = await pool.query(
-        `SELECT * FROM coach_invites WHERE token=$1 AND used_at IS NULL AND expires_at > NOW()`,
-        [invite_token]
-      )
-      if (!inviteRows[0]) return res.status(400).json({ message: 'Invalid or expired invite link.' })
-      const invite = inviteRows[0]
-      const { rows } = await pool.query(
-        `INSERT INTO users (name, email, password_hash, phone, club_id, role, platform_owner, email_verified)
-         VALUES ($1,$2,$3,$4,$5,'coach',FALSE,TRUE) RETURNING *`,
-        [name, email, hash, phone || null, invite.club_id]
-      )
-      await pool.query(
-        `INSERT INTO coaches (name, user_id, club_id, is_active)
-         SELECT $1,$2,$3,TRUE
-         WHERE NOT EXISTS (SELECT 1 FROM coaches WHERE user_id=$2 AND club_id=$3)`,
-        [name, rows[0].id, invite.club_id]
-      )
-      await pool.query(
-        `UPDATE coach_invites SET used_at=NOW(), used_by=$1 WHERE id=$2`,
-        [rows[0].id, invite.id]
-      )
-      return res.status(201).json({ token: sign(rows[0]), user: safeUser(rows[0]) })
-    }
-
-    // Platform admin signup (no club yet)
-    if (clubId === null) {
-      const verificationToken = crypto.randomBytes(32).toString('hex')
-      const { rows } = await pool.query(
-        'INSERT INTO users (name, email, password_hash, phone, club_id, platform_owner, email_verified, email_verification_token) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *',
-        [name, email, hash, phone || null, null, true, false, verificationToken]
-      )
-      const { sendVerificationEmail } = require('../utils/email')
-      await sendVerificationEmail({ to: email, name, token: verificationToken })
-      return res.status(201).json({ needsVerification: true })
-    }
 
     // Club member signup
     const { rows } = await pool.query(
@@ -101,43 +62,6 @@ router.post('/register', authLimiter, async (req, res) => {
   }
 })
 
-// GET /api/auth/verify-email?token=xxx
-router.get('/verify-email', async (req, res) => {
-  const { token } = req.query
-  if (!token) return res.status(400).json({ message: 'Missing token.' })
-  try {
-    const { rows } = await pool.query(
-      `UPDATE users SET email_verified = TRUE, email_verification_token = NULL
-       WHERE email_verification_token = $1 RETURNING id`,
-      [token]
-    )
-    if (!rows[0]) return res.status(400).json({ message: 'Invalid or expired verification link.' })
-    res.json({ verified: true })
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ message: 'Server error.' })
-  }
-})
-
-// GET /api/auth/invite-info?token=xxx — validate invite and return club name
-router.get('/invite-info', async (req, res) => {
-  const { token } = req.query
-  if (!token) return res.status(400).json({ message: 'Missing token.' })
-  try {
-    const { rows } = await pool.query(
-      `SELECT c.name AS club_name FROM coach_invites ci
-       JOIN clubs c ON c.id = ci.club_id
-       WHERE ci.token=$1 AND ci.used_at IS NULL AND ci.expires_at > NOW()`,
-      [token]
-    )
-    if (!rows[0]) return res.status(404).json({ message: 'Invalid or expired invite link.' })
-    res.json({ club_name: rows[0].club_name })
-  } catch (err) {
-    console.error(err)
-    res.status(500).json({ message: 'Server error.' })
-  }
-})
-
 // POST /api/auth/login
 // `identifier` accepts either an email address or a phone number
 router.post('/login', loginLimiter, async (req, res) => {
@@ -146,29 +70,16 @@ router.post('/login', loginLimiter, async (req, res) => {
     return res.status(400).json({ message: 'Email/phone and password are required.' })
 
   try {
-    let rows
-    if (req.club) {
-      // Club-scoped login: look up by email/phone within this club
-      ;({ rows } = await pool.query(
-        'SELECT * FROM users WHERE (email=$1 OR phone=$1) AND club_id=$2',
-        [identifier.toLowerCase().trim(), req.club.id]
-      ))
-    } else {
-      // Platform login: accept platform owners, club admins, and coaches
-      ;({ rows } = await pool.query(
-        `SELECT * FROM users WHERE (email=$1 OR phone=$1) AND (platform_owner = TRUE OR role = 'admin' OR role = 'coach')`,
-        [identifier.toLowerCase().trim()]
-      ))
-    }
+    const { rows } = await pool.query(
+      'SELECT * FROM users WHERE (email=$1 OR phone=$1) AND club_id=$2',
+      [identifier.toLowerCase().trim(), req.club.id]
+    )
     const user = rows[0]
     if (!user || !user.password_hash)
       return res.status(401).json({ message: 'Invalid email/phone or password.' })
 
     if (user.is_active === false)
       return res.status(403).json({ message: 'This account has been deactivated. Please contact the club.' })
-
-    if (!req.club && user.platform_owner && !user.email_verified)
-      return res.status(403).json({ message: 'Please verify your email before logging in. Check your inbox.', code: 'EMAIL_NOT_VERIFIED' })
 
     const ok = await bcrypt.compare(password, user.password_hash)
     if (!ok) return res.status(401).json({ message: 'Invalid email/phone or password.' })
@@ -177,31 +88,6 @@ router.post('/login', loginLimiter, async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: 'Server error.' })
-  }
-})
-
-// POST /api/auth/sso-token — issue a 60-second token for cross-domain SSO
-router.post('/sso-token', require('../middleware/auth').requireAuth, (req, res) => {
-  const ssoToken = jwt.sign(
-    { id: req.user.id, type: 'sso' },
-    process.env.JWT_SECRET,
-    { expiresIn: '60s' }
-  )
-  res.json({ token: ssoToken })
-})
-
-// GET /api/auth/sso-callback?token=XXX — exchange SSO token for a full session JWT
-router.get('/sso-callback', async (req, res) => {
-  const { token } = req.query
-  if (!token) return res.status(400).json({ message: 'Missing token.' })
-  try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET)
-    if (payload.type !== 'sso') return res.status(401).json({ message: 'Invalid token.' })
-    const { rows } = await pool.query('SELECT * FROM users WHERE id=$1', [payload.id])
-    if (!rows[0]) return res.status(401).json({ message: 'User not found.' })
-    res.json({ token: sign(rows[0]), user: safeUser(rows[0]) })
-  } catch {
-    res.status(401).json({ message: 'Invalid or expired SSO token.' })
   }
 })
 

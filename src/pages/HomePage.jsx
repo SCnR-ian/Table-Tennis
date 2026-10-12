@@ -235,7 +235,7 @@ export default function HomePage() {
   // Each banner: fixed array of 6 slots — null | { id, url }
   // Initialise from sessionStorage so the default image shows instantly on reload.
   // Key is namespaced by club subdomain so different clubs don't share the cache.
-  const clubKey = import.meta.env.VITE_CLUB_SUBDOMAIN || 'default'
+  const clubKey = 'epping'
   const initSlots = (prefix) => {
     const cached = sessionStorage.getItem(`${clubKey}_${prefix}0`)
     if (!cached) return null

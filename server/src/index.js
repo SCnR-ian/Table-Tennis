@@ -7,7 +7,6 @@ const session        = require('express-session')
 const passport       = require('./config/passport')
 const cron           = require('node-cron')
 
-const rateLimit = require('express-rate-limit')
 const { apiLimiter } = require('./middleware/rateLimit')
 
 // ── Required secrets ──────────────────────────────────────────────────────────
@@ -58,8 +57,6 @@ app.use(cors({
   },
   credentials: true,
 }))
-// Raw body needed for Stripe webhook signature verification (must come before express.json)
-app.use('/api/billing/webhook', express.raw({ type: 'application/json' }))
 app.use(express.json({ limit: '15mb' }))
 app.use('/api', apiLimiter)   // general safety-net rate limit
 
@@ -76,18 +73,12 @@ app.use(passport.session())
 // Serve uploaded files (product images, etc.)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 
-// Resolve club from subdomain and attach to req.club on every request
+// ── Health check (no database needed) ─────────────────────────────────────────
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
+
+// Attach the Epping club to req.club on every request
 const { tenantMiddleware } = require('./middleware/tenant')
 app.use(tenantMiddleware)
-
-// ── Rate limiting ─────────────────────────────────────────────────────────────
-const feedbackLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: 'Too many feedback submissions. Please try again later.' },
-})
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth',          require('./routes/auth'))
@@ -108,24 +99,10 @@ app.use('/api/pages',        require('./routes/pages'))
 app.use('/api/articles',     require('./routes/articles'))
 app.use('/api/payments',     require('./routes/payments'))
 app.use('/api/clubs',        require('./routes/clubs'))
-app.use('/api/super-admin', require('./routes/superAdmin'))
 app.use('/api/venue',        require('./routes/venue'))
 app.use('/api/shop',         require('./routes/shop'))
 app.use('/api/ai',           require('./routes/ai'))
 app.use('/api/finance',      require('./routes/finance'))
-app.use('/api/billing',      require('./routes/billing'))
-
-// ── Platform feedback ─────────────────────────────────────────────────────────
-app.post('/api/feedback', feedbackLimiter, async (req, res) => {
-  const { message, name, email, page } = req.body
-  if (!message?.trim()) return res.status(400).json({ error: 'Message is required.' })
-  const { sendFeedback } = require('./utils/email')
-  await sendFeedback({ message: message.trim(), name: name?.trim(), email: email?.trim(), page })
-  res.json({ ok: true })
-})
-
-// ── Health check ──────────────────────────────────────────────────────────────
-app.get('/api/health', (req, res) => res.json({ status: 'ok' }))
 
 // ── Debug: manually trigger reminders (dev only) ──────────────────────────────
 if (process.env.NODE_ENV !== 'production') {

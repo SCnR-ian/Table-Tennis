@@ -11,31 +11,6 @@ const api = axios.create({
   timeout: 10_000,
 });
 
-// Detect which club subdomain this frontend belongs to and attach it on every request.
-// Priority: VITE_CLUB_SUBDOMAIN env var > custom-domain map > subdomain from hostname.
-// Custom domains (e.g. eppingtabletennis.com.au) don't contain the club subdomain in
-// their hostname, so they're resolved via CUSTOM_DOMAINS. Platform subdomains
-// (e.g. epping.flinther.com) fall back to deriving the club from the hostname.
-// Platform/deploy domains (vercel.app, etc.) are excluded so staging builds still work.
-;(function setClubHeader() {
-  const PLATFORM = ['vercel.app','netlify.app','onrender.com','railway.app','fly.dev','github.io','pages.dev']
-  // Map a club's custom apex domain → its club subdomain in the DB.
-  const CUSTOM_DOMAINS = {
-    'eppingtabletennis.com.au': 'epping',
-    'www.eppingtabletennis.com.au': 'epping',
-  }
-  const hostname = typeof window !== 'undefined' ? window.location.hostname : ''
-  let subdomain = import.meta.env.VITE_CLUB_SUBDOMAIN || CUSTOM_DOMAINS[hostname] || null
-  if (!subdomain && hostname && hostname !== 'localhost' && !hostname.match(/^\d/)) {
-    const isPlatform = PLATFORM.some(d => hostname.endsWith('.' + d) || hostname === d)
-    if (!isPlatform) {
-      const parts = hostname.split('.')
-      if (parts.length >= 3) subdomain = parts[0]
-    }
-  }
-  api.defaults.headers.common['X-Club-Subdomain'] = subdomain || '_platform'
-})()
-
 // Attach JWT on every request if present
 // Also strip Content-Type for FormData so the browser sets it (with boundary)
 api.interceptors.request.use((config) => {
@@ -76,8 +51,6 @@ export const authAPI = {
   googleRedirect: () => {
     window.location.href = `${BASE}/auth/google`;
   },
-  getSSOToken:    ()      => api.post('/auth/sso-token'),
-  verifySSOToken: (token) => api.get(`/auth/sso-callback?token=${token}`),
 };
 
 // ---------------------------------------------------------------------------
@@ -276,7 +249,7 @@ export const analyticsAPI = {
 export const homepageAPI = {
   getStats:      ()           => api.get('/homepage/stats'),
   getCards:      ()           => api.get('/homepage/cards'),
-  getImageUrl:   (id)         => { const s = api.defaults.headers.common['X-Club-Subdomain']; return `${api.defaults.baseURL}/homepage/cards/${id}/image${s ? `?club=${s}` : ''}` },
+  getImageUrl:   (id)         => `${api.defaults.baseURL}/homepage/cards/${id}/image`,
   uploadImage:   (id, formData) => api.post(`/homepage/admin/cards/${id}/image`, formData, { headers: { 'Content-Type': undefined } }),
   deleteImage:   (id)         => api.delete(`/homepage/admin/cards/${id}/image`),
 }
@@ -290,7 +263,7 @@ export const homepageAPI = {
 export const pagesAPI = {
   getContent:    ()              => api.get('/pages/content'),
   updateContent: (id, content)   => api.put(`/pages/content/${id}`, { content }),
-  getImageUrl:   (id)            => { const s = api.defaults.headers.common['X-Club-Subdomain']; return `${api.defaults.baseURL}/pages/images/${id}${s ? `?club=${s}` : ''}` },
+  getImageUrl:   (id)            => `${api.defaults.baseURL}/pages/images/${id}`,
   getImageIds:   (prefix)        => api.get('/pages/image-ids', { params: prefix ? { prefix } : {} }),
   uploadImage:   (id, formData)  => api.post(`/pages/images/${id}`, formData, { headers: { 'Content-Type': undefined } }),
   deleteImage:   (id)            => api.delete(`/pages/images/${id}`),
@@ -373,11 +346,10 @@ export const financeAPI = {
 }
 
 // ---------------------------------------------------------------------------
-// Club (multi-tenancy)
+// Club settings
 // ---------------------------------------------------------------------------
 export const clubAPI = {
   getCurrent:  ()     => api.get('/clubs/current'),
-  getMine:     ()     => api.get('/clubs/mine'),
   update:      (data) => api.patch('/clubs/current', data),
   uploadLogo:  (fd)   => api.post('/clubs/logo', fd, { headers: { 'Content-Type': 'multipart/form-data' } }),
 }

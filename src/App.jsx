@@ -21,7 +21,6 @@ import FinanceReportPage   from '@/pages/admin/FinanceReportPage'
 import CoachingPage        from '@/pages/CoachingPage'
 import NotFoundPage        from '@/pages/NotFoundPage'
 import OAuthCallbackPage   from '@/pages/OAuthCallbackPage'
-import SSOCallbackPage     from '@/pages/SSOCallbackPage'
 import ScanPage            from '@/pages/ScanPage'
 import NewsPage            from '@/pages/NewsPage'
 import NewsDetailPage      from '@/pages/NewsDetailPage'
@@ -46,7 +45,6 @@ const router = createBrowserRouter([
       { path: '/booking',       element: <BookingPage /> },
       { path: '/coaching',      element: <CoachingPage /> },
       { path: '/auth/callback', element: <OAuthCallbackPage /> },
-      { path: '/auth/sso',      element: <SSOCallbackPage /> },
       { path: '/news',          element: <NewsPage /> },
       { path: '/news/:id',      element: <NewsDetailPage /> },
       { path: '/shopping',      element: <ShoppingPage /> },

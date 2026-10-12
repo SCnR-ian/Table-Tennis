@@ -1,7 +1,7 @@
 const { Resend } = require('resend')
 
 const resend   = new Resend(process.env.RESEND_API_KEY)
-const FROM     = process.env.EMAIL_FROM || 'noreply@flinther.com'
+const FROM     = process.env.EMAIL_FROM || 'noreply@eppingtabletennis.com.au'
 const CLUB_URL = process.env.FRONTEND_URL || 'http://localhost:5173'
 
 function fmtTime(t) {
@@ -107,49 +107,4 @@ async function sendCoachingScheduled({ to, name, coachName, dates, start_time, e
   }
 }
 
-// ── Email verification ─────────────────────────────────────────────────────
-async function sendVerificationEmail({ to, name, token }) {
-  if (!process.env.RESEND_API_KEY) return
-  const verifyUrl = `${process.env.FLINTHER_URL || 'https://flinther.com'}/verify-email?token=${token}`
-  try {
-    await resend.emails.send({
-      from: FROM,
-      to,
-      subject: 'Verify your Flinther account',
-      html: card(`
-        <h2 style="font-size:20px;font-weight:600;margin-bottom:8px;">Verify your email</h2>
-        <p style="color:#555;margin-bottom:28px;">Hi ${name || 'there'}, click the button below to verify your Flinther account.</p>
-        <a href="${verifyUrl}" style="display:inline-block;background:#111;color:#fff;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:14px;font-weight:500;">Verify email →</a>
-        <p style="color:#888;font-size:12px;margin-top:20px;">If the button doesn't work, copy and paste this link into your browser:</p>
-        <p style="font-size:12px;word-break:break-all;color:#333;background:#f5f5f5;padding:10px 12px;border-radius:6px;">${verifyUrl}</p>
-        <p style="color:#aaa;font-size:12px;margin-top:16px;">This link expires in 24 hours. If you didn't sign up for Flinther, you can ignore this email.</p>
-      `),
-    })
-  } catch (e) {
-    console.error('[email] sendVerificationEmail failed:', e.message)
-  }
-}
-
-// ── Flinther platform feedback ─────────────────────────────────────────────
-async function sendFeedback({ message, name, email, page }) {
-  if (!process.env.RESEND_API_KEY) return
-  const to = process.env.ADMIN_EMAIL || 'ianlinaus@gmail.com'
-  try {
-    await resend.emails.send({
-      from: FROM,
-      to,
-      subject: `Flinther feedback${name ? ` from ${name}` : ''}`,
-      html: card(`
-        <h2 style="font-size:20px;font-weight:600;margin-bottom:16px;">New feedback</h2>
-        ${name  ? `<p style="font-size:14px;color:#555;margin:4px 0;"><strong>Name:</strong> ${name}</p>`   : ''}
-        ${email ? `<p style="font-size:14px;color:#555;margin:4px 0;"><strong>Email:</strong> ${email}</p>` : ''}
-        ${page  ? `<p style="font-size:14px;color:#555;margin:4px 0;"><strong>Page:</strong> ${page}</p>`   : ''}
-        <div style="background:#f9f9f9;border-radius:8px;padding:16px;margin-top:16px;font-size:14px;color:#333;line-height:1.6;white-space:pre-wrap;">${message}</div>
-      `),
-    })
-  } catch (e) {
-    console.error('[email] sendFeedback failed:', e.message)
-  }
-}
-
-module.exports = { sendBookingConfirmation, sendSocialPlayJoined, sendCoachingScheduled, sendFeedback, sendVerificationEmail }
+module.exports = { sendBookingConfirmation, sendSocialPlayJoined, sendCoachingScheduled }

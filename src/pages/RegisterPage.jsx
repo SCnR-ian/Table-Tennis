@@ -37,9 +37,7 @@ export default function RegisterPage() {
     const { confirmPassword, ...payload } = form
     const result = await register(payload)
     if (result.success) {
-      // Platform signup (no club) → go set up their club
-      // Club signup → go to dashboard
-      navigate(club ? '/dashboard' : '/onboarding', { replace: true })
+      navigate('/dashboard', { replace: true })
     }
   }
 
@@ -70,7 +68,7 @@ export default function RegisterPage() {
             {club ? `Join ${club.name}` : 'Create your account'}
           </h1>
           <p className="text-gray-400 text-sm">
-            {club ? 'Create an account to start booking.' : 'Sign up to launch your club on Flinther.'}
+            Create an account to start booking.
           </p>
         </div>
 

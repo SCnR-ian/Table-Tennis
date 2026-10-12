@@ -1,76 +1,43 @@
 const pool = require('../db')
 
-// In-memory cache: subdomain → { club, cachedAt }
-// Avoids a DB round-trip on every request. TTL: 5 minutes.
-const cache = new Map()
-const CACHE_TTL_MS = 5 * 60 * 1000
+// ── Single-club resolver ──────────────────────────────────────────────────────
+// This server runs one club only: Epping Table Tennis. The club row is looked
+// up once by its subdomain (CLUB_SUBDOMAIN, default 'epping') and attached to
+// every request as req.club, so routes keep using req.club.id as before.
+// The club row is cached for 5 minutes; bustClubCache() clears it after an
+// admin edits the club's name, settings or logo.
 
-async function getClubBySubdomain(subdomain) {
-  const hit = cache.get(subdomain)
-  if (hit && Date.now() - hit.cachedAt < CACHE_TTL_MS) return hit.club
+const CLUB_SUBDOMAIN = process.env.CLUB_SUBDOMAIN || 'epping'
+const CACHE_TTL_MS   = 5 * 60 * 1000
 
+let cached = null   // { club, cachedAt }
+
+async function getClub() {
+  if (cached && Date.now() - cached.cachedAt < CACHE_TTL_MS) return cached.club
   const { rows } = await pool.query(
     'SELECT * FROM clubs WHERE subdomain = $1 AND is_active = TRUE',
-    [subdomain]
+    [CLUB_SUBDOMAIN]
   )
   const club = rows[0] || null
-  cache.set(subdomain, { club, cachedAt: Date.now() })
+  if (club) cached = { club, cachedAt: Date.now() }
   return club
 }
 
-function bustClubCache(subdomain) {
-  cache.delete(subdomain)
+function bustClubCache() {
+  cached = null
 }
 
-// Platform domains that are NOT club subdomains — fall back to DEV_SUBDOMAIN
-const PLATFORM_DOMAINS = ['onrender.com', 'vercel.app', 'netlify.app', 'railway.app', 'fly.dev', 'trycloudflare.com']
-
 async function tenantMiddleware(req, res, next) {
-  const host = req.headers.host || ''
-  const hostname = host.split(':')[0]   // strip port
-
-  let subdomain = null
-
-  // Check for explicit override header or query param first (header for API calls, query param for <img> tag URLs)
-  if (req.headers['x-club-subdomain'] === '_platform') {
-    // Explicit platform/landing mode — no club context, skip DEV_SUBDOMAIN fallback
-    req.club = null
-    return next()
-  } else if (req.headers['x-club-subdomain']) {
-    subdomain = req.headers['x-club-subdomain']
-  } else if (req.query?.club) {
-    subdomain = req.query.club
-  } else {
-    const parts = hostname.split('.')
-    const isPlatformDomain = PLATFORM_DOMAINS.some(d => hostname.endsWith('.' + d) || hostname === d)
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost')
-
-    if (!isPlatformDomain && !isLocalhost && parts.length >= 3) {
-      // Production custom subdomain: epping.myapp.com → 'epping'
-      subdomain = parts[0]
-    }
-  }
-
-  // Fall back to DEV_SUBDOMAIN env var (covers local dev + platform domains)
-  if (!subdomain) {
-    subdomain = process.env.DEV_SUBDOMAIN || null
-  }
-
-  if (!subdomain) {
-    // Root domain with no club context — allow health checks / super-admin routes
-    req.club = null
-    return next()
-  }
-
   try {
-    const club = await getClubBySubdomain(subdomain)
+    const club = await getClub()
     if (!club) {
-      return res.status(404).json({ message: `Club '${subdomain}' not found.` })
+      console.error(`[tenant] Club '${CLUB_SUBDOMAIN}' not found or inactive.`)
+      return res.status(503).json({ message: 'Club is not configured.' })
     }
     req.club = club
     next()
   } catch (err) {
-    console.error('Tenant middleware error:', err)
+    console.error('[tenant] error:', err.message)
     res.status(500).json({ message: 'Server error resolving club.' })
   }
 }
