@@ -9,7 +9,7 @@
     <meta name="apple-mobile-web-app-title" content="Club" />
     <link rel="manifest" href="/manifest.json" />
     <!-- Epping-only PWA branding: swap the shared manifest for Epping's logo + colours
-         on the Epping hostnames only. Leaves flinther / other tenants untouched. -->
+         on the Epping hostnames. -->
     <script>
       (function () {
         try {
@@ -17,7 +17,7 @@
           var isEpping =
             h === 'eppingtabletennis.com.au' ||
             h === 'www.eppingtabletennis.com.au' ||
-            h.lastIndexOf('epping.', 0) === 0; // epping.flinther.com etc.
+            h.lastIndexOf('epping.', 0) === 0;
           if (!isEpping) return;
           var apply = function () {
             // Remove any existing manifest links (static + VitePWA-injected) and
@@ -53,7 +53,7 @@
     <meta name="robots" content="noindex, nofollow" />
     <meta name="googlebot" content="noindex, nofollow" />
     <meta name="description" content="Book courts, join tournaments, track your game." />
-    <title>Flinther</title>
+    <title>Epping Table Tennis Club</title>
     <!-- Stripe.js – loaded globally so BookingPage can use window.Stripe() without npm -->
     <script src="https://js.stripe.com/v3/"></script>
     <!-- Fonts -->

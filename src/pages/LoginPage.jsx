@@ -62,9 +62,9 @@ export default function LoginPage() {
         {/* Heading */}
         <div className="text-center mb-8">
           <h1 className="text-2xl text-gray-900 mb-1" style={{ fontFamily: '"Kanit", sans-serif' }}>
-            Your club platform.
+            Welcome back.
           </h1>
-          <p className="text-gray-400 text-sm">Log in to your Flinther account</p>
+          <p className="text-gray-400 text-sm">Log in to your Epping Table Tennis account</p>
         </div>
 
         {/* Error */}
