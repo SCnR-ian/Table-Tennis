@@ -1,7 +1,11 @@
-# Epping standalone: what changed and how to deploy it
+# Deployment notes
 
-This branch turns the shared Epping/Flinther codebase into a single-club site
-for Epping Table Tennis Club. Flinther is no longer supported by this server.
+These notes are from when the app was running in production. It has since been retired, and the automatic deploy workflow has been removed.
+
+## Background
+
+The code started as a shared, multi-club codebase (Epping and a second product,
+Flinther). It was then cut down to a single-club app for Epping Table Tennis Club.
 
 ## What changed
 
@@ -45,15 +49,15 @@ The frontend no longer reads `VITE_CLUB_SUBDOMAIN`; only `VITE_API_URL` is neede
 ## Before deploying: protect uploaded files
 
 `server/uploads/products/` already has 34 committed images. They stay tracked
-on this branch, so a normal `git pull` on the server is safe. If you later want
+in the repo, so a normal `git pull` on the server is safe. If you later want
 them out of git, first copy the folder somewhere safe on the server, then
 `git rm -r --cached server/uploads`, commit and pull, then copy them back.
 
 ## Deploy
 
 On the EC2 server, `git pull` then `npm install` in `server/` (new dependency:
-`helmet`), then `pm2 restart tt-api`. The GitHub Actions workflow already does
-this on every push to `main`.
+`helmet`), then `pm2 restart tt-api`. While the app was live, a GitHub Actions
+workflow ran these steps on every push to `main`.
 
 ## Remove the other clubs' data (optional)
 

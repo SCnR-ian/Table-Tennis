@@ -1855,8 +1855,15 @@ Always respond in the same language the admin uses (English or Traditional Chine
 
     console.log(`[ai] stop_reason=${response.stop_reason}`)
 
-    // Agentic loop: keep running tools until stop_reason is 'end_turn'
+    // Agentic loop: keep running tools until stop_reason is 'end_turn'.
+    // Capped so a confused model can't loop forever and run up API costs.
+    const MAX_TOOL_ROUNDS = 10
+    let rounds = 0
     while (response.stop_reason === 'tool_use') {
+      if (++rounds > MAX_TOOL_ROUNDS) {
+        console.warn(`[ai] stopped after ${MAX_TOOL_ROUNDS} tool rounds`)
+        return res.json({ reply: 'That request needed too many steps. Please break it into smaller requests.' })
+      }
       const assistantMsg = { role: 'assistant', content: response.content }
       const toolResults  = []
 
