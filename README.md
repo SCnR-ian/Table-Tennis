@@ -4,6 +4,10 @@ An internal scheduling system I built and ran for Epping Table Tennis Club in Sy
 
 **Solo project:** I designed, built, secured and deployed all of it. The app has since been retired, so the code is here to read.
 
+![Demo: moving through the bookings view and cancelling a lesson](docs/demo.gif)
+
+*Short preview. [Watch the full 1-minute walkthrough (MP4)](docs/demo.mp4): home page, bookings, members, coaching and social play.*
+
 ![Bookings view: tables and coaches across the week](docs/screenshots/bookings.png)
 
 *Admin bookings view. Each column is a table, each card a lesson or booking. Member names are anonymised.*
